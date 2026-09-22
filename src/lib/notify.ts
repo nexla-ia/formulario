@@ -10,7 +10,7 @@
  * cliente não vê erro nenhum e a resposta dele continua salva.
  */
 import type { FormRecord } from './types'
-import { fullDate, publicUrl } from './utils'
+import { fullDate, panelUrl, publicUrl } from './utils'
 
 const NL = String.fromCharCode(10)
 
@@ -46,7 +46,10 @@ export interface NotifyPayload {
   respondidas: number
   total: number
   completo: boolean
+  /** endereço das respostas no painel — é para onde a equipe precisa ir */
   link: string
+  /** endereço público do formulário, o mesmo que foi para o cliente */
+  linkCliente: string
   em: string
   /** número aleatório por envio — serve de chave em fluxos com memória */
   sessionId: number
@@ -60,7 +63,7 @@ function newSessionId(): number {
 }
 
 export function buildNotice(
-  form: Pick<FormRecord, 'title' | 'slug' | 'client_name'>,
+  form: Pick<FormRecord, 'id' | 'title' | 'slug' | 'client_name'>,
   input: {
     evento: NotifyEvent
     respondente?: string | null
@@ -71,7 +74,10 @@ export function buildNotice(
   const titulo = clean(form.title) || 'Formulário sem título'
   const cliente = clean(form.client_name) || null
   const quem = clean(input.respondente) || null
-  const link = publicUrl(form.slug)
+  // O aviso é para a equipe: o link tem que cair nas respostas, não no
+  // formulário em branco. O endereço do cliente vai junto, à parte.
+  const link = panelUrl(form.id)
+  const linkCliente = publicUrl(form.slug)
   const agora = new Date().toISOString()
   const completo = input.total > 0 && input.respondidas >= input.total
   const faltam = Math.max(0, input.total - input.respondidas)
@@ -90,7 +96,7 @@ export function buildNotice(
       : `Respostas: ${input.respondidas} de ${input.total} — ${faltam === 1 ? 'falta 1' : `faltam ${faltam}`}.`,
   )
   lines.push(`Quando: ${fullDate(agora)}`)
-  lines.push(`Link: ${link}`)
+  lines.push(`Ver as respostas: ${link}`)
 
   return {
     text: lines.join(NL),
@@ -102,6 +108,7 @@ export function buildNotice(
     total: input.total,
     completo,
     link,
+    linkCliente,
     em: agora,
     sessionId: newSessionId(),
   }
@@ -136,7 +143,7 @@ export async function sendNotice(
 
 /** Atalho usado na tela do cliente: monta e dispara, sem travar nada. */
 export function notifyFilled(
-  form: Pick<FormRecord, 'title' | 'slug' | 'client_name'>,
+  form: Pick<FormRecord, 'id' | 'title' | 'slug' | 'client_name'>,
   input: {
     evento: NotifyEvent
     respondente?: string | null

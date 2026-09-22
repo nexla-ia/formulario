@@ -51,6 +51,11 @@ export function publicUrl(slug: string): string {
   return `${window.location.origin}/${slug}`
 }
 
+/** Endereço interno das respostas de um formulário. */
+export function panelUrl(formId: string): string {
+  return `${window.location.origin}/painel/f/${formId}`
+}
+
 export async function copy(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)

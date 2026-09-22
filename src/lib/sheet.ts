@@ -129,24 +129,47 @@ export interface ParseReport {
   warnings: string[]
 }
 
-export async function parseWorkbook(file: File, sheetIndex = 0): Promise<ParseReport> {
+/**
+ * Lê a planilha. Sem aba escolhida, procura sozinho a que tem as
+ * perguntas: a primeira aba costuma ser capa ou instrução, e pegar a
+ * primeira às cegas trazia "Como preencher" como pergunta.
+ */
+export async function parseWorkbook(file: File, sheetIndex?: number): Promise<ParseReport> {
   const [XLSX, buf] = await Promise.all([loadXLSX(), file.arrayBuffer()])
   const wb = XLSX.read(buf, { type: 'array', cellDates: true })
   const sheets = wb.SheetNames
   if (!sheets.length) throw new Error('Planilha vazia.')
-  const sheetName = sheets[Math.min(sheetIndex, sheets.length - 1)]
-  const grid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
-    header: 1,
-    blankrows: false,
-    defval: '',
-    raw: false,
-  })
-  return rowsToQuestions(grid, { sheetName, sheets })
+
+  const ler = (nome: string) =>
+    XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[nome], {
+      header: 1,
+      blankrows: false,
+      defval: '',
+      raw: false,
+    })
+
+  if (sheetIndex !== undefined) {
+    const nome = sheets[Math.min(sheetIndex, sheets.length - 1)]
+    return rowsToQuestions(ler(nome), { sheetName: nome, sheets })
+  }
+
+  let melhor: ParseReport | null = null
+  let erro: unknown = null
+  for (const nome of sheets) {
+    try {
+      const r = rowsToQuestions(ler(nome), { sheetName: nome, sheets })
+      if (!melhor || r.questions.length > melhor.questions.length) melhor = r
+    } catch (e) {
+      erro = erro ?? e
+    }
+  }
+  if (!melhor) throw erro ?? new Error('Planilha vazia.')
+  return melhor
 }
 
 export function rowsToQuestions(
   grid: unknown[][],
-  ctx: { sheetName: string; sheets: string[] },
+  ctx: { sheetName: string; sheets: string[]; labelOnly?: boolean },
 ): ParseReport {
   const warnings: string[] = []
   const clean = grid.filter((r) => r.some((c) => String(c ?? '').trim() !== ''))
@@ -170,9 +193,15 @@ export function rowsToQuestions(
 
   const headerFound = headerRow >= 0
   if (!headerFound) {
-    // Sem cabeçalho: assume ordem pergunta | tipo | obrigatória | opções
-    map = { label: 0, type: 1, required: 2, options: 3 }
-    warnings.push('Cabeçalho não reconhecido — usei a ordem das colunas (pergunta, tipo, obrigatória, opções).')
+    const largura = Math.max(...clean.map((r) => r.filter((c) => String(c ?? '').trim()).length))
+    if (ctx.labelOnly || largura <= 1) {
+      // Só há uma coluna de verdade: não há ordem de colunas para avisar.
+      map = { label: 0 }
+    } else {
+      // Sem cabeçalho: assume ordem pergunta | tipo | obrigatória | opções
+      map = { label: 0, type: 1, required: 2, options: 3 }
+      warnings.push('Cabeçalho não reconhecido — usei a ordem das colunas (pergunta, tipo, obrigatória, opções).')
+    }
   }
   if (map.label === undefined) {
     map.label = 0
@@ -345,8 +374,14 @@ export interface TextLine {
   text: string
   /** parágrafo com estilo de título no Word */
   heading?: boolean
-  /** item de lista (marcador ou numeração) no Word */
+  /** item de lista com marcador redondo no Word — candidato a alternativa */
   bullet?: boolean
+  /** item de lista numerada no Word — o número não vem no texto */
+  numbered?: boolean
+  /** nível da lista: 0 é o primeiro, 1+ está indentado embaixo */
+  level?: number
+  /** parágrafo inteiro em negrito */
+  bold?: boolean
 }
 
 /** Marcadores que costumam indicar uma ALTERNATIVA, não uma pergunta. */
@@ -386,8 +421,24 @@ function stripHints(raw: string): { label: string; hint: string | null; required
   return { label: label.replace(/[:：]\s*$/, '').trim(), hint, required }
 }
 
-function looksLikeSection(text: string, heading?: boolean): string | null {
+function looksLikeSection(
+  text: string,
+  heading?: boolean,
+  bold?: boolean,
+  emLista?: boolean,
+): string | null {
   if (heading) return text.replace(/[:：]\s*$/, '').trim()
+  /*
+    Daqui para baixo é palpite. Item de lista não entra: numa lista de
+    perguntas, "CNPJ" é pergunta — só está em maiúscula porque é sigla.
+    Antes essa linha virava seção e engolia a pergunta.
+  */
+  if (emLista) return null
+  // Muita gente do Word não usa estilo de título: só deixa a linha da
+  // seção em negrito.
+  if (bold && text.length <= 64 && !/[?？]/.test(text)) {
+    return text.replace(/[:：]\s*$/, '').trim()
+  }
   const md = /^#{1,6}\s+(.*)$/.exec(text)
   if (md) return md[1].trim()
   if (text.includes('?')) return null
@@ -422,15 +473,20 @@ export function linesToQuestions(
     if (!text) continue
     total++
 
-    const asSection = looksLikeSection(text, line.heading)
+    const asSection = looksLikeSection(text, line.heading, line.bold, line.bullet || line.numbered)
     if (asSection) {
       section = asSection
       last = -1
       continue
     }
 
-    const marked = OPTION_MARK.test(text) || line.bullet === true
-    const numbered = NUMBER_MARK.test(text)
+    const nivel = line.level ?? 0
+    // Lista numerada do Word: o "1." é desenhado pelo Word e não chega no
+    // texto. Isso é pergunta, nunca alternativa — tratar como marcador
+    // fazia a segunda pergunta em diante virar opção da primeira.
+    const listaNumerada = line.numbered === true && nivel === 0
+    const marked = (OPTION_MARK.test(text) || line.bullet === true) && !listaNumerada
+    const numbered = NUMBER_MARK.test(text) || listaNumerada
     const isQuestion = /[?？]\s*$/.test(text)
     const bare = stripMark(text)
     if (!bare) {
@@ -439,9 +495,11 @@ export function linesToQuestions(
     }
 
     // Alternativa: linha marcada, curta, logo abaixo de uma pergunta.
+    // Item indentado (nível 1+) é alternativa mesmo se for numerado —
+    // é o "a) / b) / c)" embaixo da pergunta.
     const canBeOption =
-      marked &&
-      !numbered &&
+      (marked || nivel > 0) &&
+      !listaNumerada &&
       !isQuestion &&
       last >= 0 &&
       bare.length <= 90 &&
@@ -553,7 +611,36 @@ export const ACCEPTED_FILES = [
   'application/rtf',
 ].join(',')
 
-export async function parseAnyFile(file: File, sheetIndex = 0): Promise<ParseReport> {
+/**
+ * Tabela do Word quase nunca é planilha de especificação. O padrão é
+ * "Campo | espaço da resposta", às vezes já preenchido pelo cliente. Se a
+ * segunda coluna não nomeia tipos de campo, ela é resposta — e a pergunta
+ * está inteira na primeira coluna. Lida como planilha, essa segunda coluna
+ * virava o "tipo" de cada pergunta e saía tudo errado.
+ */
+function narrowDocTable(grid: string[][]): { grid: string[][]; warning: string | null } {
+  const width = Math.max(...grid.map((r) => r.length))
+  if (width < 2) return { grid, warning: null }
+
+  // Cabeçalho de planilha de verdade (Pergunta / Tipo / Opções)? Respeita.
+  for (let r = 0; r < Math.min(3, grid.length); r++) {
+    const achados = (grid[r] ?? []).map((c) => matchCol(c)).filter(Boolean)
+    if (achados.length >= 2) return { grid, warning: null }
+  }
+
+  // A segunda coluna nomeia tipos de campo na maioria das linhas?
+  const segunda = grid.map((r) => String(r[1] ?? '').trim()).filter(Boolean)
+  if (segunda.length && segunda.filter((v) => matchType(v)).length / segunda.length >= 0.6) {
+    return { grid, warning: null }
+  }
+
+  return {
+    grid: grid.map((r) => [r[0] ?? '']),
+    warning: 'A tabela tinha coluna de resposta — usei só a primeira coluna como pergunta.',
+  }
+}
+
+export async function parseAnyFile(file: File, sheetIndex?: number): Promise<ParseReport> {
   const ext = (file.name.split('.').pop() ?? '').toLowerCase()
 
   if (SHEET_EXT.includes(ext)) return parseWorkbook(file, sheetIndex)
@@ -562,19 +649,52 @@ export async function parseAnyFile(file: File, sheetIndex = 0): Promise<ParseRep
     const { readDocx } = await import('./doc')
     const doc = await readDocx(file)
 
-    // Perguntas numa tabela do Word: trata igual planilha.
-    const grid = doc.tables.find((t) => t.length >= 2 && (t[0]?.length ?? 0) >= 2)
-    if (grid) {
-      const report = rowsToQuestions(grid, { sheetName: file.name, sheets: [] })
-      return {
-        ...report,
-        kind: 'doc',
-        warnings: ['Li a tabela do documento como se fosse uma planilha.', ...report.warnings],
+    /*
+      Antes, qualquer tabela com duas linhas ganhava do documento inteiro e
+      os parágrafos eram jogados fora — uma tabelinha de "Cliente / Data" no
+      topo apagava as 30 perguntas escritas embaixo. Agora as duas leituras
+      são feitas e vence a que encontra mais perguntas.
+    */
+    const candidatos: { report: ParseReport; aviso: string | null }[] = []
+
+    if (doc.blocks.length) {
+      try {
+        candidatos.push({ report: linesToQuestions(doc.blocks, file.name, 'doc'), aviso: null })
+      } catch {
+        /* segue para as tabelas */
       }
     }
 
-    if (!doc.blocks.length) throw new Error('Esse documento está vazio.')
-    return linesToQuestions(doc.blocks, file.name, 'doc')
+    for (const bruta of doc.tables) {
+      if (bruta.length < 2) continue
+      const { grid, warning } = narrowDocTable(bruta)
+      try {
+        candidatos.push({
+          report: rowsToQuestions(grid, {
+            sheetName: file.name,
+            sheets: [],
+            labelOnly: !!warning,
+          }),
+          aviso: warning ?? 'Li a tabela do documento como se fosse uma planilha.',
+        })
+      } catch {
+        /* tabela sem nada aproveitável */
+      }
+    }
+
+    const util = candidatos.filter((c) => c.report.questions.length > 0)
+    if (!util.length) throw new Error('Esse documento está vazio.')
+
+    const melhor = util.reduce((a, b) =>
+      b.report.questions.length > a.report.questions.length ? b : a,
+    )
+    return {
+      ...melhor.report,
+      kind: 'doc',
+      warnings: melhor.aviso
+        ? [melhor.aviso, ...melhor.report.warnings]
+        : melhor.report.warnings,
+    }
   }
 
   if (TEXT_EXT.includes(ext)) {

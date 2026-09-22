@@ -82,12 +82,37 @@ Outros comandos:
 
 ### Documento do Word, texto solto e colagem
 
+O Word esconde duas coisas que quebram a leitura de quem só lê o texto:
+
+- **Lista numerada não traz o número.** O parágrafo diz só "Qual o nome da
+  empresa?" — o `1.` é desenhado pelo Word a partir do `numbering.xml`. Sem ler
+  esse arquivo não dá para distinguir lista numerada de lista com marcador, e
+  as perguntas 2 em diante viravam alternativas da primeira. O leitor abre o
+  `numbering.xml` e separa os dois.
+- **Nível da lista.** Nível 0 é pergunta; o que está indentado embaixo é
+  alternativa, mesmo numerado (`a)`, `b)`, `c)`).
+
+Mais três coisas que ele resolve:
+
+- **Tabela não ganha do documento.** Antes, qualquer tabela com duas linhas
+  apagava os parágrafos — uma tabelinha de "Cliente / Data" no topo levava 30
+  perguntas junto. Agora as duas leituras são feitas e vence a que acha mais
+  perguntas.
+- **Sigla em maiúscula não vira seção.** `CNPJ` numa lista de perguntas é
+  pergunta. Linha de lista nunca é tratada como seção.
+- **Conteúdo escondido.** Parágrafos dentro de controle de conteúdo (`w:sdt`) e
+  de caixa de texto agora são lidos; antes sumiam.
+
+Na planilha, quando o arquivo tem várias abas o sistema **procura a aba das
+perguntas** em vez de pegar a primeira — a primeira costuma ser capa ou
+instrução.
+
 Nem sempre as perguntas vêm em planilha. O leitor aceita também:
 
 | Origem | Como é lido |
 | --- | --- |
-| `.docx` **com tabela** | a tabela é tratada exatamente como planilha (mesmas colunas) |
-| `.docx` **texto corrido** | cada parágrafo vira uma pergunta; parágrafos com estilo de **Título** viram seções; itens de lista viram alternativas |
+| `.docx` **com tabela** | a tabela vira perguntas. Se a segunda coluna for espaço de resposta (ou já vier preenchida), só a primeira coluna é lida |
+| `.docx` **texto corrido** | cada parágrafo vira uma pergunta; **Título** e linhas em negrito viram seções; **lista numerada vira pergunta**, **lista com marcador vira alternativa** |
 | `.txt`, `.md`, `.rtf` | uma pergunta por linha |
 | **Colar texto** | igual ao `.txt`, direto na tela |
 

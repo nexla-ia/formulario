@@ -437,7 +437,7 @@ function StepUpload({
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback(
-    async (f: File, sheetIndex = 0) => {
+    async (f: File, sheetIndex?: number) => {
       setBusy(true)
       setError(null)
       setFileName(f.name)
