@@ -6,7 +6,7 @@ import { getBackend, initBackend, seedDemo, type Backend } from './lib/db'
 import PublicForm from './pages/PublicForm'
 import NotFound from './pages/NotFound'
 
-/* O painel é carregado sob demanda: o link do cliente (/f/:slug) não
+/* O painel é carregado sob demanda: o link do cliente (/:slug) não
    baixa nada de admin, nem a leitura de planilha. */
 const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -39,6 +39,7 @@ export default function App() {
       <AnimatePresence mode="wait">
         <Suspense fallback={<Boot />}>
           <Routes location={location} key={location.pathname}>
+            {/* o link antigo continua valendo: já foi mandado para cliente */}
             <Route path="/f/:slug" element={<PublicForm />} />
             <Route path="/entrar" element={user ? <Navigate to="/painel" replace /> : <Login />} />
             <Route element={<Guard user={!!user} />}>
@@ -49,6 +50,9 @@ export default function App() {
               </Route>
             </Route>
             <Route path="/" element={<Navigate to={user ? '/painel' : '/entrar'} replace />} />
+            {/* endereço curto do cliente — fica por último para não roubar
+                /painel nem /entrar */}
+            <Route path="/:slug" element={<PublicForm />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

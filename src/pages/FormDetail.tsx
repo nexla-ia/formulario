@@ -173,7 +173,7 @@ export default function FormDetail() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => window.open(`/f/${form.slug}`, '_blank')}
+              onClick={() => window.open(`/${form.slug}`, '_blank')}
             >
               Ver como cliente ↗
             </Button>

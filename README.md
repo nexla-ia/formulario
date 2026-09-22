@@ -1,7 +1,7 @@
 # Formulários
 
 Planilha de perguntas entra, site de formulário sai. Cada cliente ganha um link
-próprio (`/f/o-endereco-dele`), com senha opcional, e as respostas voltam para o
+próprio (`/o-endereco-dele`), com senha opcional, e as respostas voltam para o
 painel da equipe — na tela ou em `.xlsx`.
 
 ---
@@ -68,7 +68,7 @@ Outros comandos:
 
    ```
    Link:
-   https://…/f/endereco-do-cliente
+   https://…/endereco-do-cliente
 
    Senha:
    h3gbmxcj
@@ -156,7 +156,7 @@ Cliente: Padaria Aurora
 Respondeu: contato@aurora.com.br
 Respostas: 12 de 12 — está completo.
 Quando: 22/09/2026, 09:13
-Link: https://painel/f/padaria-aurora-diagnostico-de-marketing-2026",
+Link: https://painel/padaria-aurora-diagnostico-de-marketing-2026",
   "evento": "preenchido",
   "formulario": "Diagnóstico de Marketing 2026",
   "cliente": "Padaria Aurora",
@@ -164,7 +164,7 @@ Link: https://painel/f/padaria-aurora-diagnostico-de-marketing-2026",
   "respondidas": 12,
   "total": 12,
   "completo": true,
-  "link": "https://painel/f/padaria-aurora-diagnostico-de-marketing-2026",
+  "link": "https://painel/padaria-aurora-diagnostico-de-marketing-2026",
   "em": "2026-09-22T12:13:44.120Z",
   "sessionId": 94772385328105
 }
@@ -198,6 +198,22 @@ no campo *Allowed Origins* do nó Webhook. O *Respond* pode ficar em
 
 Lembre que isso manda dados do cliente para fora do sistema — quem recebe o
 webhook passa a ter uma cópia do nome, do e-mail e do link.
+
+## O endereço do cliente
+
+O link é `https://seu-dominio/apelido-do-cliente` — sem prefixo. É um endereço
+que cabe numa mensagem de WhatsApp e que a pessoa consegue digitar no celular
+se precisar.
+
+Links antigos no formato `/f/apelido` **continuam abrindo**: a rota velha ficou
+no lugar, porque esses links já foram para clientes.
+
+Como o apelido mora na raiz, alguns nomes são reservados e o painel recusa:
+`painel`, `entrar`, `f`, `api`, `assets`, `index`. Um formulário chamado
+"painel" abriria o painel em vez do formulário.
+
+A aba do navegador do cliente mostra **o nome do formulário e o cliente**, não
+"Formulários · painel" — nome interno não diz nada para quem está respondendo.
 
 ## O que o cliente vê
 
@@ -406,7 +422,7 @@ src/
     Dashboard.tsx  /painel
     NewForm.tsx    /painel/novo   (assistente de 4 passos)
     FormDetail.tsx /painel/f/:id  (perguntas · ajustes · respostas)
-    PublicForm.tsx /f/:slug       (a tela que o cliente vê)
+    PublicForm.tsx /:slug         (a tela que o cliente vê · /f/:slug antigo ainda abre)
 supabase/
   schema.sql       tabelas, RPCs e RLS
   seed.sql         dois formulários de exemplo
@@ -419,7 +435,7 @@ scripts/
 ## Publicar
 
 `vercel.json` e `public/_redirects` já mandam todas as rotas para o
-`index.html` (precisa disso, senão `/f/qualquer-coisa` dá 404 no servidor).
+`index.html` (precisa disso, senão `/qualquer-coisa` dá 404 no servidor).
 
 Na Vercel/Netlify, configura as variáveis `VITE_SUPABASE_URL` e
 `VITE_SUPABASE_ANON_KEY`. `DATABASE_URL` **não** vai para o deploy — é só para

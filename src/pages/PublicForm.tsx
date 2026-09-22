@@ -64,6 +64,21 @@ export default function PublicForm() {
     return buildPalette(theme?.accent ?? '#5646f5', theme?.surface === 'ink')
   }, [form, meta])
 
+  // A aba do navegador é a primeira coisa que o cliente lê. Antes dizia
+  // "Formulários · painel" — nome interno, que não diz nada para ele.
+  useEffect(() => {
+    const titulo = form?.title ?? meta?.title
+    const cliente = form?.client_name ?? meta?.client_name
+    document.title = titulo
+      ? cliente
+        ? `${titulo} · ${cliente}`
+        : titulo
+      : 'Formulário'
+    return () => {
+      document.title = 'Formulário'
+    }
+  }, [form, meta])
+
   // O tema do formulário vale para a página inteira, não só para o conteúdo:
   // fundo do documento e barra de rolagem incluídos.
   useEffect(() => {

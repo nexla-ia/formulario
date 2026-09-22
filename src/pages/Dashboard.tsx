@@ -625,7 +625,7 @@ function FormCard({
             {f.title}
           </p>
           <p className="mt-0.5 truncate text-[13px] text-ink-3">
-            {f.client_name ? `${f.client_name} · ` : ''}/f/{f.slug}
+            {f.client_name ? `${f.client_name} · ` : ''}/{f.slug}
           </p>
 
           <div className="mt-3 flex items-center gap-2">
@@ -676,7 +676,7 @@ function FormCard({
           <IconButton
             label="Abrir como cliente"
             size="sm"
-            onClick={() => window.open(`/f/${f.slug}`, '_blank')}
+            onClick={() => window.open(`/${f.slug}`, '_blank')}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
               <path

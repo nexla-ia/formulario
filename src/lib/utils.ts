@@ -33,8 +33,22 @@ export function isSkipped(v: unknown): boolean {
   return typeof v === 'string' && v.trim() === SKIP_ANSWER
 }
 
+/**
+ * Endereços que o painel usa. Um formulário não pode ficar com um desses
+ * como apelido, senão o link do cliente abriria o painel.
+ */
+export const RESERVED_SLUGS = ['painel', 'entrar', 'f', 'api', 'assets', 'index']
+
+export function isReservedSlug(slug: string): boolean {
+  return RESERVED_SLUGS.includes(slug.trim().toLowerCase())
+}
+
+/**
+ * Link que vai para o cliente. Curto de propósito: é um endereço que a
+ * pessoa lê no WhatsApp e digita no celular se precisar.
+ */
 export function publicUrl(slug: string): string {
-  return `${window.location.origin}/f/${slug}`
+  return `${window.location.origin}/${slug}`
 }
 
 export async function copy(text: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import schemaSql from '../../supabase/schema.sql?raw'
@@ -51,6 +51,11 @@ export default function AppShell({ backend }: { backend: Backend | null }) {
   const [menu, setMenu] = useState(false)
   const toast = useToast()
   const location = useLocation()
+
+  // a aba do painel se identifica; a do cliente mostra o formulário dele
+  useEffect(() => {
+    document.title = 'Formulários · painel'
+  }, [])
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">

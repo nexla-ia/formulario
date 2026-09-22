@@ -12,7 +12,16 @@ import {
 import { TEMPLATES, templateQuestions, type Template } from '../lib/templates'
 import { createForm, slugTaken } from '../lib/db'
 import { DEFAULT_THEME, TYPE_LABEL, type DraftForm, type Question } from '../lib/types'
-import { accentOnSurface, cn, copy, publicUrl, randomPassword, readableOn, slugify } from '../lib/utils'
+import {
+  accentOnSurface,
+  cn,
+  copy,
+  isReservedSlug,
+  publicUrl,
+  randomPassword,
+  readableOn,
+  slugify,
+} from '../lib/utils'
 import { detectLogoBg, fileToLogo, getDefaultLogo, setDefaultLogo } from '../lib/brand'
 import { Button, IconButton } from '../components/ui/Button'
 import { Field, Input, Segmented, Select, Switch, Textarea } from '../components/ui/Field'
@@ -1023,6 +1032,13 @@ export function StepConfigure({
       report.current?.('empty')
       return
     }
+    // o endereço do cliente agora mora na raiz, então um apelido igual a
+    // 'painel' ou 'entrar' abriria o painel em vez do formulário
+    if (isReservedSlug(clean)) {
+      setSlugState('taken')
+      report.current?.('taken')
+      return
+    }
     setSlugState('checking')
     report.current?.('checking')
     let alive = true
@@ -1039,7 +1055,7 @@ export function StepConfigure({
     }
   }, [draft.slug, ignoreId])
 
-  const url = `${window.location.origin}/f/${slugify(draft.slug) || 'endereco'}`
+  const url = `${window.location.origin}/${slugify(draft.slug) || 'endereco'}`
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_21rem]">
@@ -1124,7 +1140,7 @@ export function StepConfigure({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14px] text-ink-2">
-                    {window.location.origin}/f/
+                    {window.location.origin}/
                     <b className="font-bold text-ink">{slugify(draft.slug) || '…'}</b>
                   </span>
                   <SlugHint state={slugState} auto={slugAuto} error={slugError} />
@@ -1169,7 +1185,7 @@ export function StepConfigure({
                 <Input
                   autoFocus
                   value={draft.slug}
-                  prefix={<span className="font-medium text-ink-3">/f/</span>}
+                  prefix={<span className="font-medium text-ink-3">/</span>}
                   placeholder="brisa-cafe-briefing"
                   onChange={(e) => onSlugChange(e.target.value)}
                   invalid={slugState === 'taken' || !!slugError}
@@ -1875,7 +1891,7 @@ ${shareText(url, password)}`,
         >
           Copiar com saudação
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => window.open(`/f/${slug}`, '_blank')}>
+        <Button size="sm" variant="ghost" onClick={() => window.open(`/${slug}`, '_blank')}>
           Ver como cliente ↗
         </Button>
       </div>
