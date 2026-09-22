@@ -30,8 +30,10 @@ export interface DocBlock {
   numbered: boolean
   /** nível da lista: 0 é o primeiro, 1+ está indentado embaixo */
   level: number
-  /** o parágrafo inteiro em negrito — muita gente marca seção assim */
+  /** o parágrafo inteiro em negrito */
   bold: boolean
+  /** tamanho da fonte em meio-pontos (24 = 12pt); null = tamanho padrão */
+  size: number | null
 }
 
 export interface DocContent {
@@ -181,7 +183,20 @@ function paragraph(p: Element, formats: NumFormats): DocBlock | null {
     else bullet = true
   }
 
-  return { text, heading, bullet, numbered, level, bold: isBold(p) }
+  return { text, heading, bullet, numbered, level, bold: isBold(p), size: sizeOf(p) }
+}
+
+/**
+ * Tamanho da fonte do parágrafo, em meio-pontos. É o sinal mais confiável
+ * para achar seção: quem escreve ficha no Word raramente usa estilo de
+ * título, mas quase sempre aumenta a fonte do nome do bloco.
+ */
+function sizeOf(p: Element): number | null {
+  const daVez =
+    p.getElementsByTagName('w:pPr')[0]?.getElementsByTagName('w:sz')[0] ??
+    p.getElementsByTagName('w:sz')[0]
+  const val = Number(daVez?.getAttribute('w:val') ?? '')
+  return Number.isFinite(val) && val > 0 ? val : null
 }
 
 /** Negrito de verdade: todos os runs com texto precisam estar em negrito. */

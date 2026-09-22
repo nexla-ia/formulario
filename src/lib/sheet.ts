@@ -98,10 +98,17 @@ export function inferType(label: string, options: string[], rawType?: unknown): 
   const declared = matchType(rawType)
   if (declared) return declared
   if (options.length >= 2) return options.length > 5 ? 'select' : 'radio'
-  if (/e-?mail/i.test(label)) return 'email'
-  if (/telefone|celular|whats/i.test(label)) return 'phone'
-  if (/\bdata\b|prazo|quando|dia \b/i.test(label)) return 'date'
-  if (/link|site|url|instagram|portf[oó]lio/i.test(label)) return 'url'
+  /*
+    Palavra-chave só vale em rótulo curto. Em "Quais pessoas respondem o
+    WhatsApp e em quais horários?" a palavra WhatsApp não faz do campo um
+    telefone — é pergunta aberta.
+  */
+  const curto = label.trim().length <= 48
+  if (/e-?mail/i.test(label) && curto) return 'email'
+  if (/telefone|celular|whats/i.test(label) && curto) return 'phone'
+  if (/data|prazo|nascimento/i.test(label) && curto) return 'date'
+  if (/quando/i.test(label) && label.trim().length <= 28) return 'date'
+  if (/link|site|url|instagram|portf[oó]lio/i.test(label) && curto) return 'url'
   if (/quantos|quantas|quantidade|n[uú]mero de|valor|or[çc]amento|cnpj|cpf/i.test(label))
     return /cnpj|cpf/i.test(label) ? 'text' : 'number'
   if (/de 0 a 10|nota de|nps|escala/i.test(label)) return 'scale'
@@ -382,6 +389,8 @@ export interface TextLine {
   level?: number
   /** parágrafo inteiro em negrito */
   bold?: boolean
+  /** tamanho da fonte em meio-pontos; null/ausente = tamanho padrão */
+  size?: number | null
 }
 
 /** Marcadores que costumam indicar uma ALTERNATIVA, não uma pergunta. */
@@ -421,36 +430,135 @@ function stripHints(raw: string): { label: string; hint: string | null; required
   return { label: label.replace(/[:：]\s*$/, '').trim(), hint, required }
 }
 
-function looksLikeSection(
-  text: string,
-  heading?: boolean,
-  bold?: boolean,
-  emLista?: boolean,
-): string | null {
-  if (heading) return text.replace(/[:：]\s*$/, '').trim()
-  /*
-    Daqui para baixo é palpite. Item de lista não entra: numa lista de
-    perguntas, "CNPJ" é pergunta — só está em maiúscula porque é sigla.
-    Antes essa linha virava seção e engolia a pergunta.
-  */
-  if (emLista) return null
-  // Muita gente do Word não usa estilo de título: só deixa a linha da
-  // seção em negrito.
-  if (bold && text.length <= 64 && !/[?？]/.test(text)) {
-    return text.replace(/[:：]\s*$/, '').trim()
+/**
+ * A convenção de cada documento.
+ *
+ * Não existe regra universal: num documento o negrito marca a seção, no
+ * outro marca o rótulo do campo. Dois-pontos idem. Olhando o documento
+ * inteiro antes de ler, dá para saber qual é o caso — se quase toda linha
+ * está em negrito, negrito não distingue seção nenhuma.
+ */
+interface DocStyle {
+  /** tamanho de fonte mais comum, em meio-pontos; 0 = o padrão do documento */
+  baseSize: number
+  /** negrito marca rótulo de campo, não seção */
+  boldIsLabel: boolean
+  /** dois-pontos marca rótulo de campo, não seção */
+  colonIsLabel: boolean
+}
+
+function readStyle(lines: TextLine[]): DocStyle {
+  const n = lines.length || 1
+  const contagem = new Map<number, number>()
+  let bold = 0
+  let colon = 0
+
+  for (const l of lines) {
+    if (l.bold) bold++
+    if (/[:：]\s*$/.test(l.text)) colon++
+    const sz = l.size ?? 0
+    contagem.set(sz, (contagem.get(sz) ?? 0) + 1)
   }
-  const md = /^#{1,6}\s+(.*)$/.exec(text)
+
+  // 0 = tamanho padrão do documento. É um valor de verdade, não ausência:
+  // tratá-lo como "não sei" fazia a comparação de tamanho nunca rodar, e
+  // as seções em 13pt viravam pergunta.
+  let baseSize = 0
+  let maior = 0
+  for (const [sz, qtd] of contagem) {
+    if (qtd > maior) {
+      maior = qtd
+      baseSize = sz
+    }
+  }
+
+  return {
+    baseSize,
+    boldIsLabel: bold / n >= 0.35,
+    colonIsLabel: colon / n >= 0.35,
+  }
+}
+
+/** Tira emoji e sinal solto do começo — "🧭 Dados para contrato". */
+function stripLead(text: string): string {
+  return text
+    .replace(
+      /^[\s -⁯←-⯿☀-➿︀-️\u{1f000}-\u{1faff}]+/u,
+      '',
+    )
+    .trim()
+}
+
+function looksLikeSection(text: string, line: TextLine, estilo: DocStyle): string | null {
+  const limpo = stripLead(text)
+  const semDoisPontos = (t: string) => t.replace(/[:：]\s*$/, '').trim()
+
+  if (line.heading) return semDoisPontos(limpo)
+
+  const md = /^#{1,6}\s+(.*)$/.exec(limpo)
   if (md) return md[1].trim()
-  if (text.includes('?')) return null
-  if (text.length > 64) return null
-  // "Sobre a empresa:" — termina em dois-pontos e não parece pergunta
-  if (/[:：]\s*$/.test(text) && text.length >= 3) return text.replace(/[:：]\s*$/, '').trim()
-  // "SOBRE A EMPRESA" — tudo em maiúscula
-  const letters = text.replace(/[^A-Za-zÀ-ÿ]/g, '')
-  if (letters.length >= 3 && text === text.toUpperCase() && /[A-ZÀ-Ü]/.test(text)) {
-    return text.trim()
+
+  // Item de lista é pergunta, nunca seção: numa lista, "CNPJ" só está em
+  // maiúscula porque é sigla.
+  if (line.bullet || line.numbered) return null
+  if (limpo.includes('?')) return null
+  if (limpo.length > 64 || limpo.length < 2) return null
+
+  /*
+    Fonte maior que o corpo do texto. É o sinal mais forte num documento do
+    Word: quem monta ficha raramente usa estilo de título, mas quase sempre
+    aumenta a fonte do nome do bloco.
+  */
+  const sz = line.size ?? 0
+  if (sz > estilo.baseSize) return semDoisPontos(limpo)
+
+  // Negrito só distingue seção onde negrito é raro.
+  if (line.bold && !estilo.boldIsLabel) return semDoisPontos(limpo)
+
+  // Dois-pontos idem: onde quase toda linha termina assim, é rótulo.
+  if (!estilo.colonIsLabel && /[:：]\s*$/.test(limpo)) return semDoisPontos(limpo)
+
+  // "SOBRE A EMPRESA" — tudo em maiúscula, e o documento não é gritado.
+  const letras = limpo.replace(/[^A-Za-zÀ-ÿ]/g, '')
+  if (
+    letras.length >= 3 &&
+    limpo === limpo.toUpperCase() &&
+    /[A-ZÀ-Ü]/.test(limpo) &&
+    !estilo.colonIsLabel
+  ) {
+    return limpo
   }
   return null
+}
+
+/**
+ * "( ) Sim ( ) Não" — alternativas escritas na mesma linha em vez de uma
+ * por linha. Só divide quando há dois marcadores ou mais.
+ */
+function splitInlineOptions(text: string): string[] {
+  const marcas = text.match(/\(\s*\)|\[\s*\]|☐|□/g)
+  if (!marcas || marcas.length < 2) return []
+  return text
+    .split(/\(\s*\)|\[\s*\]|☐|□/)
+    .map((t) => t.replace(/^[\s|,;/]+|[\s|,;/]+$/g, '').trim())
+    .filter((t) => t.length >= 1 && t.length <= 60)
+}
+
+/**
+ * "Nome da Clínica: Especialidade principal:" são dois campos numa linha
+ * só. Devolve null quando não é esse caso — é um corte perigoso e só vale
+ * quando a linha termina em dois-pontos e as partes são curtas.
+ */
+function splitLabels(text: string): string[] | null {
+  const limpo = stripLead(text)
+  if (!/[:：]\s*$/.test(limpo) || /[?？]/.test(limpo)) return null
+  const partes = limpo
+    .split(/[:：]/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+  if (partes.length < 2 || partes.length > 3) return null
+  if (partes.some((t) => t.length < 2 || t.length > 60)) return null
+  return partes
 }
 
 /** Transforma uma lista de linhas (documento ou texto colado) em perguntas. */
@@ -468,12 +576,18 @@ export function linesToQuestions(
   let skipped = 0
   let total = 0
 
-  for (const line of lines) {
-    const text = (line.text ?? '').replace(/\s+/g, ' ').trim()
-    if (!text) continue
+  const uteis = lines
+    .map((l) => ({ ...l, text: (l.text ?? '').replace(/\s+/g, ' ').trim() }))
+    .filter((l) => l.text)
+
+  // Cada documento tem a sua convenção. Descobre qual é antes de ler.
+  const estilo = readStyle(uteis)
+
+  for (const line of uteis) {
+    const text = line.text
     total++
 
-    const asSection = looksLikeSection(text, line.heading, line.bold, line.bullet || line.numbered)
+    const asSection = looksLikeSection(text, line, estilo)
     if (asSection) {
       section = asSection
       last = -1
@@ -481,6 +595,21 @@ export function linesToQuestions(
     }
 
     const nivel = line.level ?? 0
+
+    /*
+      Documento que usa negrito como rótulo de campo ("Telefone:") escreve
+      em texto normal o que é recado, espaço de resposta ou alternativa.
+      Tratar essas linhas como pergunta enchia o formulário de lixo.
+    */
+    if (estilo.boldIsLabel && line.bold === false && last >= 0 && !OPTION_MARK.test(text)) {
+      const alternativas = splitInlineOptions(text)
+      if (alternativas.length >= 2 && questions[last].options.length === 0) {
+        questions[last].options.push(...alternativas.slice(0, MAX_OPTIONS))
+      } else if (!questions[last].description) {
+        questions[last].description = text.slice(0, 220)
+      }
+      continue
+    }
     // Lista numerada do Word: o "1." é desenhado pelo Word e não chega no
     // texto. Isso é pergunta, nunca alternativa — tratar como marcador
     // fazia a segunda pergunta em diante virar opção da primeira.
@@ -505,13 +634,37 @@ export function linesToQuestions(
       bare.length <= 90 &&
       questions[last].options.length < MAX_OPTIONS
     if (canBeOption) {
-      questions[last].options.push(bare)
+      // "( ) Sim ( ) Não" na mesma linha são duas alternativas, não uma
+      const inline = splitInlineOptions(text)
+      if (inline.length >= 2) questions[last].options.push(...inline.slice(0, MAX_OPTIONS))
+      else questions[last].options.push(bare)
       continue
     }
 
-    const { label, hint, required } = stripHints(bare)
+    const { label, hint, required } = stripHints(stripLead(bare))
     if (!label) {
       skipped++
+      continue
+    }
+
+    // "Nome da Clínica: Especialidade principal:" são dois campos numa
+    // linha só — coisa de quem monta ficha economizando espaço.
+    const partes = estilo.colonIsLabel ? splitLabels(text) : null
+    if (partes) {
+      for (const parte of partes) {
+        questions.push({
+          id: uid(),
+          position: questions.length + 1,
+          section,
+          type: 'text',
+          label: parte,
+          description: null,
+          placeholder: null,
+          required: true,
+          options: [],
+        })
+      }
+      last = questions.length - 1
       continue
     }
 

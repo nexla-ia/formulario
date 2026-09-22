@@ -934,6 +934,8 @@ function StepQuestions({
   report: ParseReport | null
 }) {
   const missing = questions.filter((q) => !q.label.trim()).length
+  /** quantos campos o sistema deduziu como algo diferente de texto livre */
+  const naoTexto = questions.filter((q) => q.type !== 'text').length
   return (
     <div className="mx-auto max-w-3xl">
       <SectionTitle
@@ -944,9 +946,23 @@ function StepQuestions({
             : 'Monte as perguntas na mão. Dá para arrastar e reordenar a qualquer momento.'
         }
         right={
-          <Badge tone={missing > 0 ? 'warn' : 'neutral'}>
-            {questions.length} itens{missing > 0 && ` · ${missing} sem texto`}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {naoTexto > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onChange(questions.map((q) => ({ ...q, type: 'text' as const })))
+                }
+                title="Todo campo vira caixa de texto livre"
+              >
+                Tudo como texto
+              </Button>
+            )}
+            <Badge tone={missing > 0 ? 'warn' : 'neutral'}>
+              {questions.length} itens{missing > 0 && ` · ${missing} sem texto`}
+            </Badge>
+          </div>
         }
       />
       <div className="mt-5">
