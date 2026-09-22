@@ -1,0 +1,310 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Superfícies ─────────────────────────────────────── */
+  --color-canvas: #f2f4f9;
+  --color-canvas-2: #e9ecf5;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8f9fc;
+
+  /* ── Texto ───────────────────────────────────────────── */
+  --color-ink: #16181f;
+  --color-ink-2: #545c70;
+  --color-ink-3: #868da1;
+  --color-ink-4: #a8aec0;
+
+  /* ── Linhas ──────────────────────────────────────────── */
+  --color-line: #e2e6f0;
+  --color-line-2: #eef0f7;
+
+  /* ── Marca e estados ─────────────────────────────────── */
+  --color-brand: #5646f5;
+  --color-brand-dark: #4436d6;
+  --color-brand-soft: #eceaff;
+  --color-brand-line: #d6d1ff;
+
+  --color-ok: #0d9f6e;
+  --color-ok-soft: #e4f7ef;
+  --color-warn: #d97706;
+  --color-warn-soft: #fdf3e2;
+  --color-danger: #e11d48;
+  --color-danger-soft: #fdeaef;
+
+  /* ── Tipografia ──────────────────────────────────────── */
+  --font-sans: "Figtree", ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Figtree", ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+
+  /* ── Raios ───────────────────────────────────────────── */
+  --radius-field: 12px;
+  --radius-card: 18px;
+  --radius-xl2: 24px;
+
+  /* ── Sombras ─────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(20, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(20, 24, 40, 0.06), 0 1px 2px rgba(20, 24, 40, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(20, 24, 40, 0.09), 0 2px 4px rgba(20, 24, 40, 0.04);
+  --shadow-lg: 0 18px 40px -12px rgba(20, 24, 40, 0.18), 0 4px 10px rgba(20, 24, 40, 0.05);
+  --shadow-xl: 0 32px 64px -20px rgba(20, 24, 40, 0.26), 0 8px 20px rgba(20, 24, 40, 0.07);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ══════════════════ Base ══════════════════ */
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.021em;
+    font-weight: 700;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-brand) 22%, transparent);
+    color: var(--color-ink);
+  }
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c9cfdd;
+    border-radius: 999px;
+    border: 3px solid var(--color-canvas);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #aab2c5;
+  }
+
+  /*
+    A tela do cliente tem tema próprio, inclusive escuro. Sem isso a barra
+    de rolagem continua clara e aparece uma faixa branca na borda de um
+    formulário escuro — a página inteira perde o acabamento.
+  */
+  html[data-form-surface] {
+    background: var(--form-canvas);
+    scrollbar-color: var(--form-thumb) transparent;
+  }
+  html[data-form-surface] body {
+    background: var(--form-canvas);
+  }
+  html[data-form-surface='ink'] {
+    color-scheme: dark;
+  }
+  html[data-form-surface] ::-webkit-scrollbar-thumb {
+    background: var(--form-thumb);
+    border-color: var(--form-canvas);
+  }
+  html[data-form-surface] ::-webkit-scrollbar-thumb:hover {
+    background: var(--form-thumb-hover);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+/* ══════════════════ Utilitários ══════════════════ */
+
+@utility label-xs {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+/* Cartão branco padrão do sistema */
+@utility card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Fundo com brilho suave da cor da marca */
+@utility glow-brand {
+  box-shadow:
+    0 10px 28px -8px color-mix(in srgb, var(--color-brand) 55%, transparent),
+    0 2px 6px rgba(20, 24, 40, 0.08);
+}
+
+/* ══════════════════ Efeitos ══════════════════ */
+
+/* Malha de gradiente animada (login) */
+.mesh {
+  position: absolute;
+  inset: -30%;
+  filter: blur(72px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+.mesh span {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  mix-blend-mode: normal;
+}
+
+/* Brilho que atravessa um elemento */
+@keyframes sheen {
+  0% {
+    transform: translateX(-120%) skewX(-16deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-16deg);
+  }
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 42%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.42),
+    transparent
+  );
+  animation: sheen 2.6s var(--ease-out-expo) infinite;
+  animation-delay: 1s;
+  pointer-events: none;
+}
+
+/* Esqueleto de carregamento */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: #e8ebf3;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Ondulação estilo Material nos botões */
+@keyframes ripple {
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.ripple-dot {
+  position: absolute;
+  border-radius: 999px;
+  transform: scale(0);
+  opacity: 0.38;
+  animation: ripple 0.62s var(--ease-out-expo) forwards;
+  pointer-events: none;
+}
+
+/* Pontinhos flutuando no fundo */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+.float-slow {
+  animation: float-y 7s ease-in-out infinite;
+}
+
+/* Faixa de rolagem infinita */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee 34s linear infinite;
+}
+
+/* Cursor piscando */
+@keyframes caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 0.92em;
+  margin-left: 2px;
+  background: currentColor;
+  vertical-align: -0.1em;
+  animation: caret 1.05s steps(1) infinite;
+}
+
+/* Gradiente que anda no texto */
+@keyframes hue-slide {
+  to {
+    background-position: 200% center;
+  }
+}
+.text-gradient {
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hue-slide 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
