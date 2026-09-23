@@ -236,9 +236,18 @@ propósito:
 
 | | |
 | --- | --- |
-| por arquivo | 3 MB |
-| somando tudo, por pergunta | 8 MB |
-| quantidade | 5 arquivos |
+| por arquivo | 6 MB |
+| somando tudo, por pergunta | 18 MB |
+| quantidade | 6 arquivos |
+
+**Foto grande é reduzida antes de virar base64.** Foto de celular chega com 4 mil
+pixels de largura e 5 MB; para ler um documento fotografado, 1800 pixels basta.
+Uma foto de 11,8 MB sai daqui com **856 KB**, sem diferença visível — e sem isso
+nem passaria do limite. Vale para JPEG, PNG e WebP; HEIC do iPhone o Chrome não
+decodifica, então o original passa intacto — melhor pesado que corrompido.
+
+A redução vem **antes** da medição: na ordem contrária, a foto de 11 MB era
+recusada mesmo cabendo em 856 KB.
 
 No painel cada anexo vira um botão de **baixar** — o download é local, não
 busca nada em servidor. Na planilha e no Word aparece o **nome** do arquivo,

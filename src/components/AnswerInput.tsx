@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import type { AnexoFile, AnswerValueRaw, Question } from '../lib/types'
 import { cn, fileSize, isAnexoList, maskCep, maskDoc, maskPhone } from '../lib/utils'
 import { spring, springPop } from '../lib/anim'
@@ -492,6 +493,35 @@ function ListaSuspensa({
   const [open, setOpen] = useState(false)
   const [escrevendo, setEscrevendo] = useState(false)
   const caixa = useRef<HTMLDivElement>(null)
+  const painel = useRef<HTMLDivElement>(null)
+  const botao = useRef<HTMLButtonElement>(null)
+  /* o cartão da pergunta esconde o que passa da borda, então o painel
+     sai para o corpo da página em vez de ficar cortado dentro dele */
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null)
+
+  const medir = useCallback(() => {
+    const el = botao.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const alturaMax = 260
+    const cabe = window.innerHeight - r.bottom > alturaMax + 16
+    setPos({
+      left: r.left,
+      top: cabe ? r.bottom + 6 : Math.max(8, r.top - alturaMax - 6),
+      width: r.width,
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    medir()
+    window.addEventListener('scroll', medir, true)
+    window.addEventListener('resize', medir)
+    return () => {
+      window.removeEventListener('scroll', medir, true)
+      window.removeEventListener('resize', medir)
+    }
+  }, [open, medir])
 
   const escrito = value !== '' && !q.options.includes(value)
   const outrosAberto = !!q.allow_other && (escrito || escrevendo)
@@ -499,7 +529,9 @@ function ListaSuspensa({
   useEffect(() => {
     if (!open) return
     const fora = (e: MouseEvent) => {
-      if (!caixa.current?.contains(e.target as Node)) setOpen(false)
+      const alvo = e.target as Node
+      if (caixa.current?.contains(alvo) || painel.current?.contains(alvo)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', fora)
     return () => document.removeEventListener('mousedown', fora)
@@ -510,6 +542,7 @@ function ListaSuspensa({
   return (
     <div ref={caixa} className="relative">
       <button
+        ref={botao}
         type="button"
         autoFocus={autoFocus}
         onClick={() => setOpen((v) => !v)}
@@ -538,16 +571,24 @@ function ListaSuspensa({
         </svg>
       </motion.span>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
-            transition={springPop}
-            className="absolute z-40 mt-1.5 max-h-[16rem] w-full origin-top overflow-auto rounded-[13px] border p-1.5 shadow-lg"
-            style={{ background: p.bg, borderColor: p.line }}
-          >
+      {createPortal(
+        <AnimatePresence>
+          {open && pos && (
+            <motion.div
+              ref={painel}
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
+              transition={springPop}
+              className="fixed z-[60] max-h-[16rem] origin-top overflow-auto rounded-[13px] border p-1.5 shadow-lg"
+              style={{
+                background: p.bg,
+                borderColor: p.line,
+                left: pos.left,
+                top: pos.top,
+                width: pos.width,
+              }}
+            >
             {q.options.map((o) => {
               const on = o === value
               return (
@@ -598,10 +639,12 @@ function ListaSuspensa({
                   escrever
                 </span>
               </button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
 
       <AnimatePresence initial={false}>
         {outrosAberto && (
@@ -628,9 +671,55 @@ function ListaSuspensa({
 }
 
 /** Teto por arquivo e por pergunta. Ver o comentário de AnexoFile. */
-export const ANEXO_MAX = 3 * 1024 * 1024
-export const ANEXO_MAX_TOTAL = 8 * 1024 * 1024
-export const ANEXO_MAX_QTD = 5
+export const ANEXO_MAX = 6 * 1024 * 1024
+export const ANEXO_MAX_TOTAL = 18 * 1024 * 1024
+export const ANEXO_MAX_QTD = 6
+
+/** Acima disso, foto é reduzida antes de virar base64. */
+const FOTO_ACIMA_DE = 600 * 1024
+const FOTO_LADO_MAX = 1800
+
+/**
+ * Foto de celular chega com 3, 4, 5 MB e 4000 pixels de largura — para
+ * ler um documento fotografado, 1800 já é mais do que suficiente. Reduzir
+ * antes de virar base64 é o que faz o anexo caber: uma foto de 4 MB sai
+ * daqui com uns 400 KB, sem diferença visível.
+ *
+ * Só mexe no que o navegador sabe decodificar. HEIC do iPhone o Chrome
+ * não abre, e aí o original passa intacto — melhor pesado que corrompido.
+ */
+async function reduzirFoto(file: File): Promise<{ blob: Blob; name: string; type: string }> {
+  const intacto = { blob: file as Blob, name: file.name, type: file.type }
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type) || file.size <= FOTO_ACIMA_DE) return intacto
+
+  try {
+    const bitmap = await createImageBitmap(file)
+    const escala = Math.min(1, FOTO_LADO_MAX / Math.max(bitmap.width, bitmap.height))
+    const w = Math.max(1, Math.round(bitmap.width * escala))
+    const h = Math.max(1, Math.round(bitmap.height * escala))
+
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return intacto
+    // PNG com transparência viraria fundo preto no JPEG
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, w, h)
+    ctx.drawImage(bitmap, 0, 0, w, h)
+    bitmap.close?.()
+
+    const blob = await new Promise<Blob | null>((ok) =>
+      canvas.toBlob((b) => ok(b), 'image/jpeg', 0.82),
+    )
+    if (!blob || blob.size >= file.size) return intacto
+
+    const nome = file.name.replace(/\.[^.]+$/, '') + '.jpg'
+    return { blob, name: nome, type: 'image/jpeg' }
+  } catch {
+    return intacto
+  }
+}
 
 /**
  * Anexo do cliente. O arquivo é lido no navegador e vai embutido na
@@ -670,23 +759,35 @@ function CampoAnexo({
         setErro(`No máximo ${ANEXO_MAX_QTD} arquivos.`)
         break
       }
-      if (file.size > ANEXO_MAX) {
-        setErro(`"${file.name}" tem ${fileSize(file.size)}. O limite é ${fileSize(ANEXO_MAX)}.`)
-        continue
-      }
-      if (soma + file.size > ANEXO_MAX_TOTAL) {
-        setErro(`Somando tudo passa de ${fileSize(ANEXO_MAX_TOTAL)}.`)
-        break
-      }
+
       try {
+        /*
+          Reduzir vem antes de medir. Na ordem contrária, uma foto de
+          celular de 7 MB era recusada mesmo cabendo em 400 KB depois da
+          redução — e o cliente ficava sem saída.
+        */
+        const reduzido = await reduzirFoto(file)
+        const tamanho = reduzido.blob.size
+
+        if (tamanho > ANEXO_MAX) {
+          const nota =
+            tamanho < file.size ? ` (já reduzido de ${fileSize(file.size)})` : ''
+          setErro(`"${file.name}" tem ${fileSize(tamanho)}${nota}. O limite é ${fileSize(ANEXO_MAX)}.`)
+          continue
+        }
+        if (soma + tamanho > ANEXO_MAX_TOTAL) {
+          setErro(`Somando tudo passa de ${fileSize(ANEXO_MAX_TOTAL)}.`)
+          break
+        }
+
         const data = await new Promise<string>((ok, falhou) => {
           const fr = new FileReader()
           fr.onload = () => ok(String(fr.result))
           fr.onerror = () => falhou(new Error('leitura'))
-          fr.readAsDataURL(file)
+          fr.readAsDataURL(reduzido.blob)
         })
-        novos.push({ name: file.name, size: file.size, type: file.type, data })
-        soma += file.size
+        novos.push({ name: reduzido.name, size: tamanho, type: reduzido.type, data })
+        soma += tamanho
       } catch {
         setErro(`Não consegui ler "${file.name}".`)
       }
@@ -746,7 +847,7 @@ function CampoAnexo({
           {lendo ? 'Lendo o arquivo…' : arquivos.length ? 'Anexar mais um' : 'Escolher arquivo'}
         </span>
         <span className="text-[12.5px]" style={{ color: p.muted }}>
-          ou arraste aqui · até {fileSize(ANEXO_MAX)} cada
+          ou arraste aqui · até {fileSize(ANEXO_MAX)} cada · foto grande é reduzida
         </span>
       </motion.button>
 

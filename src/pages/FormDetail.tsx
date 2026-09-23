@@ -735,14 +735,18 @@ function ResponseRow({
                       </span>
                       {q.label}
                     </dt>
-                    <dd
-                      className={cn(
-                        'mt-1 text-[14.5px] leading-relaxed whitespace-pre-line',
-                        text ? 'text-ink' : 'text-ink-4 italic',
-                      )}
-                    >
-                      {text || 'em branco'}
-                    </dd>
+                    {isAnexoList(valueOf(r, q)) ? (
+                      <Anexos arquivos={valueOf(r, q) as AnexoFile[]} />
+                    ) : (
+                      <dd
+                        className={cn(
+                          'mt-1 text-[14.5px] leading-relaxed whitespace-pre-line',
+                          text ? 'text-ink' : 'text-ink-4 italic',
+                        )}
+                      >
+                        {text || 'em branco'}
+                      </dd>
+                    )}
                   </div>
                 )
               })}

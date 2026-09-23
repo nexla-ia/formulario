@@ -1,8 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react'
+import { createPortal } from 'react-dom'
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type InputHTMLAttributes,
@@ -185,6 +188,37 @@ export function Picker<T extends string>({
   const [cursor, setCursor] = useState(0)
   const boxRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const botaoRef = useRef<HTMLButtonElement>(null)
+  /*
+    O painel sai para o corpo da página. Dentro do cartão da pergunta ele
+    ficava cortado: o cartão tem overflow escondido por causa da animação
+    de abrir e fechar, e levava metade da lista junto.
+  */
+  const [caixa, setCaixa] = useState<{ left: number; top: number; width: number } | null>(null)
+
+  const medir = useCallback(() => {
+    const el = botaoRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const alturaMax = 320
+    const cabeEmbaixo = window.innerHeight - r.bottom > alturaMax + 16
+    setCaixa({
+      left: r.left,
+      top: cabeEmbaixo ? r.bottom + 6 : Math.max(8, r.top - alturaMax - 6),
+      width: r.width,
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    medir()
+    window.addEventListener('scroll', medir, true)
+    window.addEventListener('resize', medir)
+    return () => {
+      window.removeEventListener('scroll', medir, true)
+      window.removeEventListener('resize', medir)
+    }
+  }, [open, medir])
 
   const atual = items.find((i) => i.value === value) ?? null
   const indiceAtual = Math.max(
@@ -200,7 +234,11 @@ export function Picker<T extends string>({
   useEffect(() => {
     if (!open) return
     const fora = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false)
+      const alvo = e.target as Node
+      // o painel vive fora desta árvore agora: sem checá-lo, o clique numa
+      // opção fechava a lista antes de a escolha chegar
+      if (boxRef.current?.contains(alvo) || listRef.current?.contains(alvo)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', fora)
     return () => document.removeEventListener('mousedown', fora)
@@ -250,6 +288,7 @@ export function Picker<T extends string>({
   return (
     <div ref={boxRef} className={cn('relative', className)}>
       <button
+        ref={botaoRef}
         id={id}
         type="button"
         role="combobox"
@@ -288,17 +327,19 @@ export function Picker<T extends string>({
         </svg>
       </motion.span>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            ref={listRef}
-            role="listbox"
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
-            transition={springPop}
-            className="absolute z-50 mt-1.5 max-h-[18rem] w-full origin-top overflow-auto rounded-[14px] border border-line bg-surface p-1.5 shadow-lg"
-          >
+      {createPortal(
+        <AnimatePresence>
+          {open && caixa && (
+            <motion.div
+              ref={listRef}
+              role="listbox"
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
+              transition={springPop}
+              style={{ left: caixa.left, top: caixa.top, width: caixa.width }}
+              className="fixed z-[60] max-h-[20rem] origin-top overflow-auto rounded-[14px] border border-line bg-surface p-1.5 shadow-lg"
+            >
             {items.map((item, i) => {
               const on = item.value === value
               const sob = i === cursor
@@ -358,10 +399,12 @@ export function Picker<T extends string>({
                   </button>
                 </div>
               )
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   )
 }

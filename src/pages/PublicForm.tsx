@@ -10,12 +10,13 @@ import {
   type PublicFormMeta,
   type SubmitMode,
 } from '../lib/db'
-import type { AnswerValue, FormRecord, Question, ResponseRecord } from '../lib/types'
+import type { AnexoFile, AnswerValue, FormRecord, Question, ResponseRecord } from '../lib/types'
 import {
   accentOnSurface,
   answerText,
   cn,
   fullDate,
+  fileSize,
   isAnexoList,
   isEmail,
   isSkipped,
@@ -1378,6 +1379,15 @@ function Runner({
 
 /* ══════════════ revisão antes de enviar ══════════════ */
 
+/** "2 arquivos · 2,4 MB" — cabe numa linha, nome de arquivo não. */
+function resumoAnexo(arquivos: AnexoFile[]): string {
+  if (!arquivos.length) return 'Toque para responder'
+  const total = arquivos.reduce((t, f) => t + f.size, 0)
+  return arquivos.length === 1
+    ? `${arquivos[0].name} · ${fileSize(total)}`
+    : `${arquivos.length} arquivos · ${fileSize(total)}`
+}
+
 function ReviewList({
   form,
   answers,
@@ -1459,12 +1469,49 @@ function ReviewList({
                   <span className="block text-[13px] font-semibold" style={{ color: palette.muted }}>
                     {q.label}
                   </span>
-                  <span
-                    className={cn('mt-1 block text-[15px] leading-relaxed whitespace-pre-line')}
-                    style={{ color: vazio ? palette.muted : palette.fg, fontStyle: vazio ? 'italic' : undefined }}
-                  >
-                    {vazio ? 'não respondeu' : text}
-                  </span>
+                  {isAnexoList(answers[q.id]) && (answers[q.id] as AnexoFile[]).length ? (
+                    // anexo não é texto: nome de arquivo corrido fica ilegível
+                    <span className="mt-1.5 flex flex-wrap gap-1.5">
+                      {(answers[q.id] as AnexoFile[]).map((f, k) => (
+                        <span
+                          key={`${f.name}-${k}`}
+                          className="flex max-w-full items-center gap-2 rounded-[9px] px-2.5 py-1.5"
+                          style={{ background: `${palette.accent}14`, color: palette.fg }}
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            className="shrink-0"
+                            style={{ color: palette.accentText }}
+                          >
+                            <path
+                              d="M6.5 3.5h7L19 9v11.5H6.5z"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinejoin="round"
+                            />
+                            <path d="M13 3.5V9h6" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+                          </svg>
+                          <span className="min-w-0 truncate text-[13.5px] font-semibold">{f.name}</span>
+                          <span className="shrink-0 text-[12px]" style={{ color: palette.muted }}>
+                            {fileSize(f.size)}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span
+                      className={cn('mt-1 block text-[15px] leading-relaxed whitespace-pre-line')}
+                      style={{
+                        color: vazio ? palette.muted : palette.fg,
+                        fontStyle: vazio ? 'italic' : undefined,
+                      }}
+                    >
+                      {vazio ? 'não respondeu' : text}
+                    </span>
+                  )}
                 </span>
                 <motion.button
                   type="button"
@@ -1606,7 +1653,10 @@ function CardsBoard({
                       fontWeight: text ? 400 : 600,
                     }}
                   >
-                    {text || 'Toque para responder'}
+                    {/* anexo: contar vale mais que espremer nome de arquivo */}
+                    {isAnexoList(answers[q.id])
+                      ? resumoAnexo(answers[q.id] as AnexoFile[])
+                      : text || 'Toque para responder'}
                   </span>
                   {err && (
                     <span className="mt-1 block text-[12.5px] font-semibold text-[#e11d48]">
