@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { Question } from '../lib/types'
-import { cn, maskCep, maskDoc, maskPhone } from '../lib/utils'
+import type { AnexoFile, AnswerValueRaw, Question } from '../lib/types'
+import { cn, fileSize, isAnexoList, maskCep, maskDoc, maskPhone } from '../lib/utils'
 import { spring, springPop } from '../lib/anim'
 
-export type AnswerValueT = string | number | string[] | boolean | null
+export type AnswerValueT = AnswerValueRaw
 
 export interface Palette {
   /** fundo do cartão */
@@ -134,6 +134,11 @@ export default function AnswerInput({
       )
     }
 
+    case 'file':
+      return (
+        <CampoAnexo q={q} value={value} onChange={onChange} p={p} fieldStyle={fieldStyle} />
+      )
+
     case 'select':
       return (
         <ListaSuspensa
@@ -152,7 +157,7 @@ export default function AnswerInput({
       const multi = q.type === 'checkbox'
       const selected: string[] = multi
         ? Array.isArray(value)
-          ? value
+          ? (value as unknown[]).filter((v): v is string => typeof v === 'string')
           : []
         : typeof value === 'string' && value
           ? [value]
@@ -616,6 +621,202 @@ function ListaSuspensa({
               style={fieldStyle}
             />
           </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/** Teto por arquivo e por pergunta. Ver o comentário de AnexoFile. */
+export const ANEXO_MAX = 3 * 1024 * 1024
+export const ANEXO_MAX_TOTAL = 8 * 1024 * 1024
+export const ANEXO_MAX_QTD = 5
+
+/**
+ * Anexo do cliente. O arquivo é lido no navegador e vai embutido na
+ * resposta em data URL — nada é enviado para lugar nenhum antes de a
+ * pessoa apertar enviar.
+ */
+function CampoAnexo({
+  q,
+  value,
+  onChange,
+  p,
+  fieldStyle,
+}: {
+  q: Question
+  value: AnswerValueT
+  onChange: (v: AnswerValueT) => void
+  p: Palette
+  fieldStyle: CSSProperties
+}) {
+  const arquivos: AnexoFile[] = isAnexoList(value) ? value : []
+  const [erro, setErro] = useState<string | null>(null)
+  const [lendo, setLendo] = useState(false)
+  const [sobre, setSobre] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const somaAtual = arquivos.reduce((t, f) => t + f.size, 0)
+
+  async function receber(lista: FileList | null) {
+    if (!lista?.length) return
+    setErro(null)
+    setLendo(true)
+    const novos: AnexoFile[] = []
+    let soma = somaAtual
+
+    for (const file of Array.from(lista)) {
+      if (arquivos.length + novos.length >= ANEXO_MAX_QTD) {
+        setErro(`No máximo ${ANEXO_MAX_QTD} arquivos.`)
+        break
+      }
+      if (file.size > ANEXO_MAX) {
+        setErro(`"${file.name}" tem ${fileSize(file.size)}. O limite é ${fileSize(ANEXO_MAX)}.`)
+        continue
+      }
+      if (soma + file.size > ANEXO_MAX_TOTAL) {
+        setErro(`Somando tudo passa de ${fileSize(ANEXO_MAX_TOTAL)}.`)
+        break
+      }
+      try {
+        const data = await new Promise<string>((ok, falhou) => {
+          const fr = new FileReader()
+          fr.onload = () => ok(String(fr.result))
+          fr.onerror = () => falhou(new Error('leitura'))
+          fr.readAsDataURL(file)
+        })
+        novos.push({ name: file.name, size: file.size, type: file.type, data })
+        soma += file.size
+      } catch {
+        setErro(`Não consegui ler "${file.name}".`)
+      }
+    }
+
+    setLendo(false)
+    if (novos.length) onChange([...arquivos, ...novos])
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const remover = (i: number) => {
+    const resto = arquivos.filter((_, j) => j !== i)
+    onChange(resto.length ? resto : null)
+    setErro(null)
+  }
+
+  return (
+    <div>
+      <motion.button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setSobre(true)
+        }}
+        onDragLeave={() => setSobre(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setSobre(false)
+          void receber(e.dataTransfer.files)
+        }}
+        whileTap={{ scale: 0.995 }}
+        transition={spring}
+        className="flex w-full cursor-pointer flex-col items-center gap-1.5 rounded-[13px] border border-dashed px-4 py-6 text-center"
+        style={{
+          ...fieldStyle,
+          borderColor: sobre ? p.accent : fieldStyle.borderColor,
+          background: sobre ? `${p.accent}12` : fieldStyle.background,
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ color: p.accentText }}>
+          <path
+            d="M12 16.5V4.8M12 4.8 7.8 9M12 4.8 16.2 9"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4.5 15v3.2a1.3 1.3 0 0 0 1.3 1.3h12.4a1.3 1.3 0 0 0 1.3-1.3V15"
+            stroke="currentColor"
+            strokeWidth="1.9"
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="text-[15px] font-semibold" style={{ color: p.fg }}>
+          {lendo ? 'Lendo o arquivo…' : arquivos.length ? 'Anexar mais um' : 'Escolher arquivo'}
+        </span>
+        <span className="text-[12.5px]" style={{ color: p.muted }}>
+          ou arraste aqui · até {fileSize(ANEXO_MAX)} cada
+        </span>
+      </motion.button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => void receber(e.target.files)}
+      />
+
+      <AnimatePresence initial={false}>
+        {arquivos.map((f, i) => (
+          <motion.div
+            key={`${f.name}-${i}`}
+            layout
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, x: -10, transition: { duration: 0.15 } }}
+            transition={spring}
+            className="mt-2 flex items-center gap-3 rounded-[12px] border px-3 py-2.5"
+            style={{ borderColor: p.line, background: `${p.accent}0d` }}
+          >
+            <span
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+              style={{ background: `${p.accent}1f`, color: p.accentText }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M6.5 3.5h7L19 9v11.5H6.5z"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinejoin="round"
+                />
+                <path d="M13 3.5V9h6" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[14px] font-semibold" style={{ color: p.fg }}>
+                {f.name}
+              </span>
+              <span className="block text-[12px]" style={{ color: p.muted }}>
+                {fileSize(f.size)}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => remover(i)}
+              aria-label={`Remover ${f.name}`}
+              className="shrink-0 cursor-pointer rounded-[8px] p-1.5"
+              style={{ color: p.muted }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {erro && (
+          <motion.p
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-2 text-[13px] font-semibold text-[#e11d48]"
+          >
+            {erro}
+          </motion.p>
         )}
       </AnimatePresence>
     </div>

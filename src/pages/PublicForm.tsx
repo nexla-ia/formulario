@@ -16,6 +16,7 @@ import {
   answerText,
   cn,
   fullDate,
+  isAnexoList,
   isEmail,
   isSkipped,
   isValidCep,
@@ -944,9 +945,17 @@ function Runner({
 
   useEffect(() => {
     try {
-      localStorage.setItem(storeKey, JSON.stringify({ at: new Date().toISOString(), answers }))
+      /*
+        Anexo fica de fora do rascunho local: um PDF em base64 estoura
+        sozinho a cota do navegador e derruba o rascunho de todo o resto.
+        O arquivo vive em memória até a pessoa enviar.
+      */
+      const leve = Object.fromEntries(
+        Object.entries(answers).filter(([, v]) => !isAnexoList(v)),
+      )
+      localStorage.setItem(storeKey, JSON.stringify({ at: new Date().toISOString(), answers: leve }))
     } catch {
-      /* ignora */
+      /* cota cheia — o rascunho é conveniência, não pode atrapalhar */
     }
   }, [answers, storeKey])
 
@@ -970,6 +979,9 @@ function Runner({
       if (q.type === 'doc' && !isValidDoc(String(v)))
         return 'Esse CPF ou CNPJ não confere. Revise os números.'
       if (q.type === 'cep' && !isValidCep(String(v))) return 'CEP tem 8 dígitos.'
+      if (q.type === 'file' && isAnexoList(v) && v.length === 0) {
+        return q.required ? 'Anexe pelo menos um arquivo.' : null
+      }
       return null
     },
     [answers],

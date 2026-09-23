@@ -224,6 +224,49 @@ no campo *Allowed Origins* do nó Webhook. O *Respond* pode ficar em
 Lembre que isso manda dados do cliente para fora do sistema — quem recebe o
 webhook passa a ter uma cópia do nome, do e-mail e do link.
 
+## Anexo de documento
+
+Tipo de campo **Anexo**: o cliente escolhe (ou arrasta) o arquivo e ele vai
+embutido na própria resposta, em base64 — sem balde de arquivos para
+configurar, funciona igual no Supabase e no modo demonstração.
+
+A conta disso é peso: base64 engorda o arquivo em um terço, e ele viaja junto
+da resposta toda vez que o painel a carrega. Por isso os limites são baixos de
+propósito:
+
+| | |
+| --- | --- |
+| por arquivo | 3 MB |
+| somando tudo, por pergunta | 8 MB |
+| quantidade | 5 arquivos |
+
+No painel cada anexo vira um botão de **baixar** — o download é local, não
+busca nada em servidor. Na planilha e no Word aparece o **nome** do arquivo,
+não o conteúdo. O anexo também fica **fora do rascunho local**: um PDF em
+base64 estoura sozinho a cota do navegador e derrubaria o rascunho de todo o
+resto.
+
+Se um dia precisar de arquivo grande, o caminho é o Supabase Storage — balde
+privado, o cliente só envia, o painel baixa por link temporário. Aí o limite
+passa a ser o do plano, não o do banco.
+
+## Campos que se formatam sozinhos
+
+- **CPF / CNPJ** — pontua enquanto se digita e decide qual é pela quantidade de
+  dígitos. Os dígitos verificadores são conferidos de verdade, então erro de
+  digitação não passa. Com outra quantidade de dígitos passa direto: RG não tem
+  formato nacional, e pontuar errado é pior que não pontuar.
+- **CEP** — `00000-000`, oito dígitos, teclado numérico no celular.
+
+## "Outros" nas escolhas
+
+Escolha única, múltipla escolha e lista têm um interruptor
+*"Deixar o cliente escrever uma opção"*. Ligado, aparece **Outros** no fim da
+lista com um campo para escrever qual.
+
+O que fica gravado é **o texto que a pessoa escreveu**, não a palavra "Outros"
+— então a planilha, o Word e o resumo do painel mostram a resposta de verdade.
+
 ## O endereço do cliente
 
 O link é `https://seu-dominio/apelido-do-cliente` — sem prefixo. É um endereço

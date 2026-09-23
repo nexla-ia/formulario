@@ -5,8 +5,17 @@ import { deleteForm, getForm, listResponses, slugTaken, updateForm } from '../li
 import { exportResponses } from '../lib/sheet'
 import { exportAllResponsesDocx, exportResponseDocx } from '../lib/docx'
 import { NOTIFY_WEBHOOK, notifyFilled } from '../lib/notify'
-import type { FormRecord, Question, ResponseRecord } from '../lib/types'
-import { answerText, cn, fullDate, publicUrl, slugify, timeAgo } from '../lib/utils'
+import type { AnexoFile, FormRecord, Question, ResponseRecord } from '../lib/types'
+import {
+  answerText,
+  cn,
+  fileSize,
+  fullDate,
+  isAnexoList,
+  publicUrl,
+  slugify,
+  timeAgo,
+} from '../lib/utils'
 import { Button, IconButton } from '../components/ui/Button'
 import { Badge, Empty, SectionTitle } from '../components/ui/Chrome'
 import { Confirm, Skeleton, useToast } from '../components/ui/Feedback'
@@ -579,20 +588,59 @@ function ResponseDoc({
                   {q.label}
                   {q.required && !text && <span className="text-danger">*</span>}
                 </dt>
-                <dd
-                  className={cn(
-                    'mt-1 text-[14.5px] leading-relaxed whitespace-pre-line',
-                    text ? 'text-ink' : 'text-warn italic',
-                  )}
-                >
-                  {text || 'em branco'}
-                </dd>
+                {isAnexoList(valueOf(r, q)) ? (
+                  <Anexos arquivos={valueOf(r, q) as AnexoFile[]} />
+                ) : (
+                  <dd
+                    className={cn(
+                      'mt-1 text-[14.5px] leading-relaxed whitespace-pre-line',
+                      text ? 'text-ink' : 'text-warn italic',
+                    )}
+                  >
+                    {text || 'em branco'}
+                  </dd>
+                )}
               </div>
             </div>
           )
         })}
       </dl>
     </div>
+  )
+}
+
+/**
+ * Os arquivos que o cliente anexou. O conteúdo já veio junto da resposta
+ * em data URL, então o download é local — não busca nada em servidor.
+ */
+function Anexos({ arquivos }: { arquivos: AnexoFile[] }) {
+  if (!arquivos.length) {
+    return <dd className="mt-1 text-[14.5px] text-warn italic">em branco</dd>
+  }
+  return (
+    <dd className="mt-1.5 flex flex-wrap gap-2">
+      {arquivos.map((f, i) => (
+        <a
+          key={`${f.name}-${i}`}
+          href={f.data}
+          download={f.name}
+          className="group flex max-w-full items-center gap-2.5 rounded-[11px] border border-line bg-surface px-3 py-2 transition-colors hover:border-brand"
+        >
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-brand-soft text-brand">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <path d="M12 4v11M12 15l-4-4M12 15l4-4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 17.5v1.2a1.3 1.3 0 0 0 1.3 1.3h11.4a1.3 1.3 0 0 0 1.3-1.3v-1.2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13.5px] font-semibold text-ink group-hover:text-brand">
+              {f.name}
+            </span>
+            <span className="block text-[12px] text-ink-3">{fileSize(f.size)} · baixar</span>
+          </span>
+        </a>
+      ))}
+    </dd>
   )
 }
 

@@ -23,7 +23,9 @@ const TIPOS: PickerItem<QuestionType>[] = QUESTION_TYPES.map((t) => ({
     ? 'Escrever'
     : ['email', 'phone', 'url', 'date', 'doc', 'cep'].includes(t.value)
       ? 'Dado com formato'
-      : 'Escolher',
+      : t.value === 'file'
+        ? 'Enviar arquivo'
+        : 'Escolher',
 }))
 
 export function blankQuestion(position: number, section: string | null = null): Question {

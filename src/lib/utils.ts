@@ -1,4 +1,5 @@
 import clsx, { type ClassValue } from 'clsx'
+import type { AnexoFile } from './types'
 
 export const cn = (...v: ClassValue[]) => clsx(v)
 
@@ -184,12 +185,27 @@ export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.tri
 export const isUrl = (v: string) => /^(https?:\/\/)?[\w-]+(\.[\w-]+)+([/?#].*)?$/i.test(v.trim())
 
 /** Texto legível de uma resposta, do jeito que a equipe lê e exporta. */
+/** Tamanho em bytes escrito como gente lê. */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
+}
+
+export function isAnexoList(v: unknown): v is AnexoFile[] {
+  return Array.isArray(v) && v.every((f) => !!f && typeof f === 'object' && 'data' in f)
+}
+
 export function answerText(
   type: string,
-  value: string | number | string[] | boolean | null | undefined,
+  value: string | number | string[] | boolean | AnexoFile[] | null | undefined,
 ): string {
   if (value == null || value === '') return ''
-  if (Array.isArray(value)) return value.join(', ')
+  // anexo: o texto é a lista de nomes — o conteúdo não cabe em lugar nenhum
+  if (isAnexoList(value)) {
+    return value.map((f) => `${f.name} (${fileSize(f.size)})`).join(', ')
+  }
+  if (Array.isArray(value)) return (value as string[]).join(', ')
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
   if (type === 'date') {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value))

@@ -49,6 +49,7 @@ const TYPE_ALIASES: [QuestionType, string[]][] = [
   ['date', ['data', 'date', 'dia', 'prazo', 'calendario']],
   ['doc', ['cpf', 'cnpj', 'cpf cnpj', 'documento', 'doc', 'cpf ou cnpj', 'cpf e cnpj']],
   ['cep', ['cep', 'codigo postal', 'zip']],
+  ['file', ['anexo', 'arquivo', 'anexar', 'upload', 'envie o arquivo', 'documento anexo']],
   ['select', ['lista suspensa', 'select', 'dropdown', 'combo', 'suspensa', 'menu']],
   ['radio', ['escolha unica', 'unica escolha', 'radio', 'unica', 'opcao unica', 'single', 'uma opcao']],
   ['checkbox', ['multipla escolha', 'multipla', 'checkbox', 'varias', 'multi', 'multiselect', 'caixas']],
@@ -111,6 +112,7 @@ export function inferType(label: string, options: string[], rawType?: unknown): 
   if (/data|prazo|nascimento/i.test(label) && curto) return 'date'
   if (/quando/i.test(label) && label.trim().length <= 28) return 'date'
   if (/link|site|url|instagram|portf[oó]lio/i.test(label) && curto) return 'url'
+  if (/anexe|anexo|anexar|envie o arquivo|upload/i.test(label)) return 'file'
   if (/cep|c[óo]digo postal/i.test(label) && curto) return 'cep'
   if (/cnpj|cpf/i.test(label) && curto) return 'doc'
   if (/quantos|quantas|quantidade|n[uú]mero de|valor|or[çc]amento/i.test(label)) return 'number'

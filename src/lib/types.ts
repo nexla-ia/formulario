@@ -8,6 +8,7 @@ export type QuestionType =
   | 'date'
   | 'doc'
   | 'cep'
+  | 'file'
   | 'select'
   | 'radio'
   | 'checkbox'
@@ -25,6 +26,7 @@ export const QUESTION_TYPES: { value: QuestionType; label: string; hint: string;
   { value: 'date', label: 'Data', hint: 'calendário', needsOptions: false },
   { value: 'doc', label: 'CPF / CNPJ', hint: 'formata e confere', needsOptions: false },
   { value: 'cep', label: 'CEP', hint: '00000-000', needsOptions: false },
+  { value: 'file', label: 'Anexo', hint: 'arquivo do cliente', needsOptions: false },
   { value: 'select', label: 'Lista suspensa', hint: 'escolhe 1', needsOptions: true },
   { value: 'radio', label: 'Escolha única', hint: 'botões', needsOptions: true },
   { value: 'checkbox', label: 'Múltipla escolha', hint: 'escolhe várias', needsOptions: true },
@@ -106,11 +108,29 @@ export interface FormRecord {
   response_count?: number
 }
 
+/**
+ * Arquivo anexado pelo cliente. O conteúdo vai embutido na própria
+ * resposta, em data URL — sem balde de arquivos para configurar. A conta
+ * disso é peso: base64 engorda o arquivo em um terço e ele passa a viajar
+ * junto da resposta toda vez que o painel a carrega. Por isso o limite
+ * por arquivo é baixo de propósito.
+ */
+export interface AnexoFile {
+  name: string
+  /** tamanho do arquivo original, em bytes */
+  size: number
+  type: string
+  /** data:<mime>;base64,… */
+  data: string
+}
+
+export type AnswerValueRaw = string | number | string[] | boolean | AnexoFile[] | null
+
 export interface AnswerValue {
   question_id: string
   label: string
   type: QuestionType
-  value: string | number | string[] | boolean | null
+  value: AnswerValueRaw
 }
 
 export interface ResponseRecord {
