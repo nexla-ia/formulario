@@ -18,6 +18,8 @@ import {
   fullDate,
   isEmail,
   isSkipped,
+  isValidCep,
+  isValidDoc,
   isUrl,
   readableOn,
   SKIP_ANSWER,
@@ -965,6 +967,9 @@ function Runner({
       if (q.type === 'url' && !isUrl(String(v))) return 'Link parece inválido.'
       if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 10)
         return 'Telefone incompleto.'
+      if (q.type === 'doc' && !isValidDoc(String(v)))
+        return 'Esse CPF ou CNPJ não confere. Revise os números.'
+      if (q.type === 'cep' && !isValidCep(String(v))) return 'CEP tem 8 dígitos.'
       return null
     },
     [answers],

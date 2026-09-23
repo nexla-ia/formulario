@@ -101,6 +101,77 @@ export function pad(n: number, size = 2): string {
   return String(n).padStart(size, '0')
 }
 
+/**
+ * CPF e CNPJ na mesma caixa. Qual dos dois é decidido pela quantidade de
+ * dígitos: 11 vira CPF, 12 em diante vira CNPJ. Enquanto está no meio do
+ * caminho, ou quando é um RG (que não tem formato nacional), o texto
+ * segue como a pessoa digitou — melhor não pontuar do que pontuar errado.
+ */
+export function maskDoc(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 14)
+  if (d.length <= 11) {
+    if (d.length <= 3) return d
+    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
+    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+  }
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
+}
+
+export function maskCep(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8)
+  return d.length <= 5 ? d : `${d.slice(0, 5)}-${d.slice(5)}`
+}
+
+/** Os dois últimos dígitos do CPF são conferência: confere de verdade. */
+function cpfOk(d: string): boolean {
+  if (d.length !== 11 || /^(\d){10}$/.test(d)) return false
+  for (const [ate, pos] of [
+    [9, 10],
+    [10, 11],
+  ] as const) {
+    let soma = 0
+    for (let i = 0; i < ate; i++) soma += Number(d[i]) * (pos - i)
+    const resto = (soma * 10) % 11 % 10
+    if (resto !== Number(d[ate])) return false
+  }
+  return true
+}
+
+function cnpjOk(d: string): boolean {
+  if (d.length !== 14 || /^(\d){13}$/.test(d)) return false
+  const conta = (ate: number) => {
+    let peso = ate - 7
+    let soma = 0
+    for (let i = 0; i < ate; i++) {
+      soma += Number(d[i]) * peso--
+      if (peso < 2) peso = 9
+    }
+    const resto = soma % 11
+    return resto < 2 ? 0 : 11 - resto
+  }
+  return conta(12) === Number(d[12]) && conta(13) === Number(d[13])
+}
+
+/**
+ * Só reprova o que dá para afirmar que está errado. Com 11 ou 14 dígitos
+ * é CPF ou CNPJ e os dígitos de conferência decidem; qualquer outra
+ * quantidade pode ser um RG, e aí passa.
+ */
+export function isValidDoc(v: string): boolean {
+  const d = String(v ?? '').replace(/\D/g, '')
+  if (d.length === 11) return cpfOk(d)
+  if (d.length === 14) return cnpjOk(d)
+  return d.length > 0
+}
+
+export function isValidCep(v: string): boolean {
+  return /^\d{8}$/.test(String(v ?? '').replace(/\D/g, ''))
+}
+
 export function maskPhone(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 11)
   if (d.length <= 2) return d

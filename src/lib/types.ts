@@ -6,6 +6,8 @@ export type QuestionType =
   | 'phone'
   | 'url'
   | 'date'
+  | 'doc'
+  | 'cep'
   | 'select'
   | 'radio'
   | 'checkbox'
@@ -21,6 +23,8 @@ export const QUESTION_TYPES: { value: QuestionType; label: string; hint: string;
   { value: 'phone', label: 'Telefone', hint: '(00) 00000-0000', needsOptions: false },
   { value: 'url', label: 'Link', hint: 'https://', needsOptions: false },
   { value: 'date', label: 'Data', hint: 'calendário', needsOptions: false },
+  { value: 'doc', label: 'CPF / CNPJ', hint: 'formata e confere', needsOptions: false },
+  { value: 'cep', label: 'CEP', hint: '00000-000', needsOptions: false },
   { value: 'select', label: 'Lista suspensa', hint: 'escolhe 1', needsOptions: true },
   { value: 'radio', label: 'Escolha única', hint: 'botões', needsOptions: true },
   { value: 'checkbox', label: 'Múltipla escolha', hint: 'escolhe várias', needsOptions: true },
@@ -44,6 +48,13 @@ export interface Question {
   placeholder: string | null
   required: boolean
   options: string[]
+  /**
+   * Em escolha única, múltipla escolha e lista: acrescenta "Outros", e
+   * quem marca essa opção escreve a resposta à mão. O que fica gravado é
+   * o texto que a pessoa escreveu — não a palavra "Outros" —, então a
+   * planilha e o Word mostram a resposta de verdade.
+   */
+  allow_other?: boolean
 }
 
 export type FormStatus = 'draft' | 'published' | 'closed'

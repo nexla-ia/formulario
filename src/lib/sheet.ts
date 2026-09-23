@@ -47,6 +47,8 @@ const TYPE_ALIASES: [QuestionType, string[]][] = [
   ['phone', ['telefone', 'fone', 'celular', 'phone', 'whatsapp', 'tel']],
   ['url', ['url', 'link', 'site', 'website', 'endereco web']],
   ['date', ['data', 'date', 'dia', 'prazo', 'calendario']],
+  ['doc', ['cpf', 'cnpj', 'cpf cnpj', 'documento', 'doc', 'cpf ou cnpj', 'cpf e cnpj']],
+  ['cep', ['cep', 'codigo postal', 'zip']],
   ['select', ['lista suspensa', 'select', 'dropdown', 'combo', 'suspensa', 'menu']],
   ['radio', ['escolha unica', 'unica escolha', 'radio', 'unica', 'opcao unica', 'single', 'uma opcao']],
   ['checkbox', ['multipla escolha', 'multipla', 'checkbox', 'varias', 'multi', 'multiselect', 'caixas']],
@@ -109,8 +111,9 @@ export function inferType(label: string, options: string[], rawType?: unknown): 
   if (/data|prazo|nascimento/i.test(label) && curto) return 'date'
   if (/quando/i.test(label) && label.trim().length <= 28) return 'date'
   if (/link|site|url|instagram|portf[oó]lio/i.test(label) && curto) return 'url'
-  if (/quantos|quantas|quantidade|n[uú]mero de|valor|or[çc]amento|cnpj|cpf/i.test(label))
-    return /cnpj|cpf/i.test(label) ? 'text' : 'number'
+  if (/cep|c[óo]digo postal/i.test(label) && curto) return 'cep'
+  if (/cnpj|cpf/i.test(label) && curto) return 'doc'
+  if (/quantos|quantas|quantidade|n[uú]mero de|valor|or[çc]amento/i.test(label)) return 'number'
   if (/de 0 a 10|nota de|nps|escala/i.test(label)) return 'scale'
   if (/quantas estrelas|avalie|satisfa[çc][ãa]o/i.test(label)) return 'rating'
   if (/^(voc|vcs|vocês|tem|possui|j[aá] |pode|podemos|aceita|deseja)/i.test(label.trim()))

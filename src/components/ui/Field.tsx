@@ -1,11 +1,12 @@
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   forwardRef,
+  useEffect,
   useId,
+  useRef,
   useState,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
 import { cn } from '../../lib/utils'
@@ -145,37 +146,135 @@ export const Textarea = forwardRef<
 
 /* ── Select ─────────────────────────────────────────────── */
 
-export const Select = forwardRef<
-  HTMLSelectElement,
-  SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }
->(function Select({ className, invalid, onFocus, onBlur, children, ...rest }, ref) {
-  const [focus, setFocus] = useState(false)
+/* ── Switch ─────────────────────────────────────────────── */
+
+/* ── Seletor ─────────────────────────────────────────────
+   O <select> do sistema abre uma lista desenhada pelo sistema
+   operacional: fonte cinza, cantos retos, sem espaço para explicar cada
+   opção. Este abre um painel próprio, com a descrição de cada item ao
+   lado do nome, e responde a teclado igual ao nativo.
+*/
+
+export interface PickerItem<T extends string> {
+  value: T
+  label: string
+  /** explicação curta ao lado do nome */
+  hint?: string
+  /** separa grupos na lista */
+  group?: string
+}
+
+export function Picker<T extends string>({
+  value,
+  items,
+  onChange,
+  placeholder = 'Selecione…',
+  invalid,
+  className,
+  id,
+}: {
+  value: T | ''
+  items: PickerItem<T>[]
+  onChange: (v: T) => void
+  placeholder?: string
+  invalid?: boolean
+  className?: string
+  id?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [cursor, setCursor] = useState(0)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  const atual = items.find((i) => i.value === value) ?? null
+  const indiceAtual = Math.max(
+    0,
+    items.findIndex((i) => i.value === value),
+  )
+
+  useEffect(() => {
+    if (open) setCursor(indiceAtual)
+  }, [open, indiceAtual])
+
+  // clique fora fecha
+  useEffect(() => {
+    if (!open) return
+    const fora = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', fora)
+    return () => document.removeEventListener('mousedown', fora)
+  }, [open])
+
+  // mantém o item do cursor à vista
+  useEffect(() => {
+    if (!open) return
+    listRef.current
+      ?.querySelector(`[data-i="${cursor}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [open, cursor])
+
+  function teclado(e: React.KeyboardEvent) {
+    if (!open) {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+        e.preventDefault()
+        setOpen(true)
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setOpen(false)
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setCursor((c) => Math.min(items.length - 1, c + 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setCursor((c) => Math.max(0, c - 1))
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setCursor(0)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setCursor(items.length - 1)
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      const escolhido = items[cursor]
+      if (escolhido) {
+        onChange(escolhido.value)
+        setOpen(false)
+      }
+    }
+  }
+
   return (
-    <div className="relative">
-      <select
-        ref={ref}
+    <div ref={boxRef} className={cn('relative', className)}>
+      <button
+        id={id}
+        type="button"
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={teclado}
         className={cn(
           CONTROL,
-          'h-11 cursor-pointer appearance-none pr-10',
-          ring(focus, invalid),
-          className,
+          'flex h-11 cursor-pointer items-center gap-2 pr-10 text-left',
+          ring(open, invalid),
         )}
-        onFocus={(e) => {
-          setFocus(true)
-          onFocus?.(e)
-        }}
-        onBlur={(e) => {
-          setFocus(false)
-          onBlur?.(e)
-        }}
-        {...rest}
       >
-        {children}
-      </select>
+        <span className={cn('min-w-0 flex-1 truncate', !atual && 'text-ink-4')}>
+          {atual ? atual.label : placeholder}
+        </span>
+        {atual?.hint && (
+          <span className="hidden shrink-0 text-[12.5px] text-ink-3 sm:block">{atual.hint}</span>
+        )}
+      </button>
+
       <motion.span
         aria-hidden
         className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-ink-3"
-        animate={{ rotate: focus ? 180 : 0 }}
+        animate={{ rotate: open ? 180 : 0 }}
         transition={springPop}
       >
         <svg width="12" height="8" viewBox="0 0 12 8" fill="none">
@@ -188,11 +287,84 @@ export const Select = forwardRef<
           />
         </svg>
       </motion.span>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            ref={listRef}
+            role="listbox"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
+            transition={springPop}
+            className="absolute z-50 mt-1.5 max-h-[18rem] w-full origin-top overflow-auto rounded-[14px] border border-line bg-surface p-1.5 shadow-lg"
+          >
+            {items.map((item, i) => {
+              const on = item.value === value
+              const sob = i === cursor
+              const abreGrupo = item.group && item.group !== items[i - 1]?.group
+              return (
+                <div key={item.value}>
+                  {abreGrupo && (
+                    <p className="px-2.5 pt-2.5 pb-1 text-[11px] font-bold tracking-[0.08em] text-ink-4 uppercase">
+                      {item.group}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    data-i={i}
+                    onMouseEnter={() => setCursor(i)}
+                    onClick={() => {
+                      onChange(item.value)
+                      setOpen(false)
+                    }}
+                    className={cn(
+                      'flex w-full cursor-pointer items-center gap-2 rounded-[10px] px-2.5 py-2 text-left transition-colors',
+                      sob && 'bg-canvas-2',
+                      on && 'bg-brand-soft',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'min-w-0 flex-1 truncate text-[14px]',
+                        on ? 'font-bold text-brand' : 'font-medium text-ink',
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    {item.hint && (
+                      <span className="shrink-0 text-[12px] text-ink-3">{item.hint}</span>
+                    )}
+                    {on && (
+                      <motion.svg
+                        layoutId={`picker-${id ?? 'x'}`}
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className="shrink-0 text-brand"
+                      >
+                        <path
+                          d="m5 12.5 4.5 4.5L19 7.5"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </motion.svg>
+                    )}
+                  </button>
+                </div>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
-})
-
-/* ── Switch ─────────────────────────────────────────────── */
+}
 
 export function Switch({
   checked,

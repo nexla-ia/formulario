@@ -24,7 +24,7 @@ import {
 } from '../lib/utils'
 import { detectLogoBg, fileToLogo, getDefaultLogo, setDefaultLogo } from '../lib/brand'
 import { Button, IconButton } from '../components/ui/Button'
-import { Field, Input, Segmented, Select, Switch, Textarea } from '../components/ui/Field'
+import { Field, Input, Picker, Segmented, Switch, Textarea } from '../components/ui/Field'
 import { Badge, CheckBurst, SectionTitle } from '../components/ui/Chrome'
 import { useToast } from '../components/ui/Feedback'
 import QuestionList, { blankQuestion } from '../components/QuestionList'
@@ -743,20 +743,17 @@ function StepUpload({
                   </div>
                   <div className="flex items-center gap-2">
                     {report.sheets.length > 1 && (
-                      <select
-                        className="h-9 cursor-pointer rounded-[10px] border border-line bg-surface px-2.5 text-[13px]"
+                      <Picker
+                        id="aba"
                         value={report.sheetName}
-                        onChange={(e) => {
-                          const idx = report.sheets.indexOf(e.target.value)
+                        items={report.sheets.map((sh) => ({ value: sh, label: sh }))}
+                        placeholder="aba"
+                        onChange={(sh) => {
+                          const idx = report.sheets.indexOf(sh)
                           if (file) void handleFile(file, idx)
                         }}
-                      >
-                        {report.sheets.map((sh) => (
-                          <option key={sh} value={sh}>
-                            aba: {sh}
-                          </option>
-                        ))}
-                      </select>
+                        className="w-[11rem]"
+                      />
                     )}
                     <Button size="sm" onClick={onNext}>
                       Revisar {report.questions.length} perguntas →

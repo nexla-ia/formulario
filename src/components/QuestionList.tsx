@@ -2,7 +2,7 @@ import { AnimatePresence, Reorder, motion, useDragControls } from 'motion/react'
 import { useState, type ReactElement } from 'react'
 import { QUESTION_TYPES, TYPE_LABEL, type Question, type QuestionType } from '../lib/types'
 import { cn } from '../lib/utils'
-import { Field, Input, Select, Switch, Textarea } from './ui/Field'
+import { Field, Input, Picker, Switch, Textarea, type PickerItem } from './ui/Field'
 import { Button, IconButton } from './ui/Button'
 import { Badge } from './ui/Chrome'
 import { spring, springPop } from '../lib/anim'
@@ -13,6 +13,18 @@ const uid = () =>
     : `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
 const needsOptions = (t: QuestionType) => ['select', 'radio', 'checkbox'].includes(t)
+
+/** Os tipos agrupados, para a lista não virar um paredão de 13 linhas. */
+const TIPOS: PickerItem<QuestionType>[] = QUESTION_TYPES.map((t) => ({
+  value: t.value,
+  label: t.label,
+  hint: t.hint,
+  group: ['text', 'textarea', 'number'].includes(t.value)
+    ? 'Escrever'
+    : ['email', 'phone', 'url', 'date', 'doc', 'cep'].includes(t.value)
+      ? 'Dado com formato'
+      : 'Escolher',
+}))
 
 export function blankQuestion(position: number, section: string | null = null): Question {
   return {
@@ -321,10 +333,11 @@ function Row({
                 </Field>
 
                 <Field label="Tipo de resposta">
-                  <Select
+                  <Picker
+                    id={`tipo-${q.id}`}
                     value={q.type}
-                    onChange={(e) => {
-                      const type = e.target.value as QuestionType
+                    items={TIPOS}
+                    onChange={(type) =>
                       onPatch({
                         type,
                         options:
@@ -332,14 +345,8 @@ function Row({
                             ? ['Opção 1', 'Opção 2']
                             : q.options,
                       })
-                    }}
-                  >
-                    {QUESTION_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label} — {t.hint}
-                      </option>
-                    ))}
-                  </Select>
+                    }
+                  />
                 </Field>
 
                 <Field label="Seção" hint="Agrupa perguntas na tela do cliente.">
@@ -368,6 +375,8 @@ function Row({
                     >
                       <OptionEditor
                         options={q.options}
+                        allowOther={q.allow_other ?? false}
+                        onAllowOther={(allow_other) => onPatch({ allow_other })}
                         onChange={(options) => onPatch({ options })}
                       />
                     </motion.div>
@@ -400,9 +409,13 @@ function Row({
 function OptionEditor({
   options,
   onChange,
+  allowOther,
+  onAllowOther,
 }: {
   options: string[]
   onChange: (v: string[]) => void
+  allowOther: boolean
+  onAllowOther: (v: boolean) => void
 }) {
   const set = (i: number, v: string) => onChange(options.map((o, j) => (j === i ? v : o)))
   const add = () => onChange([...options, `Opção ${options.length + 1}`])
@@ -449,6 +462,19 @@ function OptionEditor({
       <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={add}>
         + Adicionar opção
       </Button>
+
+      <div className="mt-3 border-t border-line-2 pt-3">
+        <Switch
+          checked={allowOther}
+          onChange={onAllowOther}
+          label="Deixar o cliente escrever uma opção"
+          hint={
+            allowOther
+              ? 'Aparece "Outros" no fim da lista, com um campo para ele escrever qual. O que fica gravado é o texto dele.'
+              : 'Quem não se encaixa em nenhuma opção fica sem saída.'
+          }
+        />
+      </div>
     </Field>
   )
 }

@@ -7,7 +7,7 @@ import { cn, copy, publicUrl, readableOn, timeAgo } from '../lib/utils'
 import { Button, IconButton } from '../components/ui/Button'
 import { Badge, CountUp, Empty, SectionTitle } from '../components/ui/Chrome'
 import { Confirm, Skeleton, useToast } from '../components/ui/Feedback'
-import { Input, Select } from '../components/ui/Field'
+import { Input, Picker } from '../components/ui/Field'
 import { listItem, listParent, pageVariants, spring } from '../lib/anim'
 
 const STATUS: Record<FormStatus, { label: string; tone: 'neutral' | 'ok' | 'warn' }> = {
@@ -280,17 +280,13 @@ export default function Dashboard() {
 
         <label className="flex shrink-0 items-center gap-2">
           <span className="hidden text-[13px] font-semibold text-ink-3 sm:block">Ordenar</span>
-          <Select
+          <Picker
+            id="ordenar"
             value={sort}
-            onChange={(e) => setSort(e.target.value as Sort)}
-            className="h-11 w-[11.5rem]"
-          >
-            {SORTS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
+            items={SORTS.map((o) => ({ value: o.value, label: o.label }))}
+            onChange={setSort}
+            className="w-[11.5rem]"
+          />
         </label>
       </div>
 
