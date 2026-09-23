@@ -914,6 +914,20 @@ function Runner({
   /** índice da pergunta aberta na janelinha (modo lista) */
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
+  /* A etiqueta do bloco gruda embaixo da barra de topo. A altura da barra
+     muda com o tamanho da tela, então é medida em vez de chutada. */
+  const topoRef = useRef<HTMLDivElement>(null)
+  const [alturaTopo, setAlturaTopo] = useState(64)
+  useLayoutEffect(() => {
+    const el = topoRef.current
+    if (!el) return
+    const medir = () => setAlturaTopo(el.offsetHeight)
+    medir()
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const [answers, setAnswers] = useState<Answers>(() => initialAnswers(storeKey, previous))
   const [i, setI] = useState(0)
   const [dir, setDir] = useState(1)
@@ -1082,7 +1096,7 @@ function Runner({
   return (
     <div>
       {/* ── topo ── */}
-      <div className="sticky top-0 z-30 mb-5">
+      <div ref={topoRef} className="sticky top-0 z-30 mb-5">
         {/*
           A faixa atravessa a tela inteira; só o conteúdo fica preso à
           coluna. Sem isso ela vira um retângulo solto no meio do monitor.
@@ -1191,15 +1205,25 @@ function Runner({
           {form.questions.map((q, qi) => (
             <div key={q.id} id={`pq-${q.id}`}>
               {q.section && q.section !== (form.questions[qi - 1]?.section ?? null) && (
-                <motion.p
-                  initial={{ opacity: 0, x: -10 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  className="mt-7 mb-2 px-1 text-[12.5px] font-bold tracking-[0.06em] uppercase first:mt-0"
-                  style={{ color: palette.accentText }}
+                <div
+                  className="sticky z-20 mt-7 mb-2 flex first:mt-0"
+                  style={{ top: alturaTopo + 8 }}
                 >
-                  {q.section}
-                </motion.p>
+                  <motion.span
+                    initial={{ opacity: 0, x: -10 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    className="rounded-full px-3 py-1.5 text-[11.5px] font-bold tracking-[0.07em] uppercase shadow-sm backdrop-blur-md"
+                    style={{
+                      background: palette.bg,
+                      color: palette.accentText,
+                      border: `1px solid ${palette.accent}55`,
+                      boxShadow: `0 6px 18px -10px ${palette.accent}, 0 0 0 4px ${palette.canvas}`,
+                    }}
+                  >
+                    {q.section}
+                  </motion.span>
+                </div>
               )}
               <motion.div
                 initial={{ opacity: 0, y: 22 }}
@@ -1214,6 +1238,7 @@ function Runner({
                   value={answers[q.id] ?? null}
                   error={errors[q.id]}
                   onChange={(v) => set(q.id, v)}
+                  hideSection
                 />
               </motion.div>
             </div>
@@ -1873,6 +1898,7 @@ function QuestionCard({
   onChange,
   onEnter,
   autoFocus,
+  hideSection,
 }: {
   q: Question
   index: number
@@ -1882,27 +1908,66 @@ function QuestionCard({
   onChange: (v: AnswerValueT) => void
   onEnter?: () => void
   autoFocus?: boolean
+  /** a etiqueta do bloco já está grudada no topo — não repete aqui */
+  hideSection?: boolean
 }) {
+  // Numa página com 30 perguntas iguais, o que orienta é saber onde você
+  // está e o que já ficou para trás.
+  const respondida = !!answerText(q.type, value)
+
   return (
     <div
-      className="relative overflow-hidden rounded-[16px] shadow-sm transition-shadow"
+      className="group relative overflow-hidden rounded-[16px] shadow-sm transition-[box-shadow,border-color,transform] duration-200 focus-within:-translate-y-0.5"
       style={{
         background: palette.bg,
         border: `1px solid ${error ? '#e11d48' : palette.line}`,
       }}
     >
-      {/* barra lateral colorida */}
-      <span
+      {/* barra lateral: apagada enquanto está em branco, cheia quando responde */}
+      <motion.span
         className="absolute inset-y-0 left-0 w-[5px]"
-        style={{ background: error ? '#e11d48' : palette.accent, opacity: error ? 1 : 0.9 }}
+        style={{ background: error ? '#e11d48' : palette.accent }}
+        animate={{ opacity: error ? 1 : respondida ? 0.95 : 0.3 }}
+        transition={{ duration: 0.3 }}
+      />
+      {/* brilho de foco: o cartão em que a pessoa está digitando se destaca */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[16px] opacity-0 transition-opacity duration-200 group-focus-within:opacity-100"
+        style={{ boxShadow: `0 0 0 2px ${palette.accent}55, 0 14px 32px -18px ${palette.accent}` }}
       />
 
-      <div className="px-5 py-5 pl-6 sm:px-7 sm:pl-8">
+      <div className="relative px-5 py-5 pl-6 sm:px-7 sm:pl-8">
         <div className="flex items-baseline gap-2">
-          <span className="text-[12.5px] font-bold tabular-nums" style={{ color: palette.accentText }}>
+          <span
+            className="flex items-center gap-1 text-[12.5px] font-bold tabular-nums"
+            style={{ color: palette.accentText }}
+          >
             {String(index + 1).padStart(2, '0')}
+            <AnimatePresence>
+              {respondida && (
+                <motion.svg
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={spring}
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="m5 12.5 4.5 4.5L19 7.5"
+                    stroke="currentColor"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </motion.svg>
+              )}
+            </AnimatePresence>
           </span>
-          {q.section && (
+          {q.section && !hideSection && (
             <span className="text-[12px] font-semibold" style={{ color: palette.muted }}>
               {q.section}
             </span>

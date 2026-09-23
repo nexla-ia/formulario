@@ -1601,11 +1601,18 @@ function LogoPicker({
   const [sugestao, setSugestao] = useState<string | null>(null)
   const jaOlhou = useRef<string | null>(null)
   useEffect(() => {
-    if (!value || bg) return setSugestao(null)
+    if (!value) {
+      jaOlhou.current = null
+      setSugestao(null)
+      return
+    }
+    // A cor descoberta fica guardada mesmo depois de aplicada. Antes ela
+    // era apagada, e como a mesma logo não é analisada duas vezes, clicar
+    // em "tirar" sumia com o controle de vez.
     if (jaOlhou.current === value) return
     jaOlhou.current = value
     void detectLogoBg(value).then(setSugestao)
-  }, [value, bg])
+  }, [value])
 
   async function pick(file: File) {
     setBusy(true)
